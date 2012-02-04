@@ -6,6 +6,7 @@ Original project is Joseph Gentle's [`ShareJS`](https://github.com/josephg/Share
 This branch adds data type for formatted text.
 
 The document is represented as:
+```
 [
     {
         t: "A fragment of a fat"
@@ -18,10 +19,11 @@ The document is represented as:
         params: {italic: true}
     }
 ]
-
+```
 Parameters is key-value pairs and can only be replaced.
 
 Available actions:
+```
     * Insert text
         p: # 9 position, which will be inserted into the text
         t: "bold" pasted text
@@ -42,7 +44,7 @@ Available actions:
         fc: 4 # Number of characters for which the format is changed
         paramsd: # Removed settings (no more than one per transaction)
             bold: true
-
+```
 Transformation of the text insertion and deletion of text to each other are obvious, they
 copied from the behavior of the string operations ShareJS.
 The operation insert text in the transformation perfectly against the change operation
@@ -60,18 +62,5 @@ However, the change is one of the operations will be reduced or removed altogeth
 Both transactions change the same parameter, but different values, one of the
 operations will be reduced (on the server side decision is in favor of the
 incoming transactions on the client - in favor of already perfect).
-
-Throughout the code, the following notation:
-    p, pos: position, measured from the beginning of the document
-    offset: position, measured from the beginning of the block format
-    index: the index of the block formatting
-In the operations of the notation:
-    t: text, is opposed to the original s - string
-    params: parameters linked to the text
-    i: insert, insert
-    d: delete, delete
-    p: position, measured from the beginning of the document
-    len: the length is indicated only for operations that can not be calculated
-
 
 Check also google group about rich text formatting using OT here: http://groups.google.com/group/sharejs/browse_thread/thread/f973fd957e34448e
