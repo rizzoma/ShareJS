@@ -6,24 +6,24 @@ Original project is Joseph Gentle's [`ShareJS`](https://github.com/josephg/Share
 This branch adds data type for formatted text.
 
 The document is represented as:
-```
-[
-    {
-        t: "A fragment of a fat"
-        params:
-            bold: true
-            font-size: 14
-    }
-    {
-        t: "Fragment of an inclined"
-        params: {italic: true}
-    }
-]
-```
+
+    [
+        {
+            t: "A fragment of a fat"
+            params:
+                bold: true
+                font-size: 14
+        }
+        {
+            t: "Fragment of an inclined"
+            params: {italic: true}
+        }
+    ]
+
 Parameters is key-value pairs and can only be replaced.
 
 Available actions:
-```
+
     * Insert text
         p: # 9 position, which will be inserted into the text
         t: "bold" pasted text
@@ -44,7 +44,7 @@ Available actions:
         fc: 4 # Number of characters for which the format is changed
         paramsd: # Removed settings (no more than one per transaction)
             bold: true
-```
+
 Transformation of the text insertion and deletion of text to each other are obvious, they
 copied from the behavior of the string operations ShareJS.
 The operation insert text in the transformation perfectly against the change operation
