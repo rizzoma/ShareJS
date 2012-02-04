@@ -1,195 +1,77 @@
-ShareJS
+ShareJS with text-formatted document type
 =======
 
-This is a little server (& client library) to allow concurrent editing of any kind of content. The server runs on NodeJS and the client works in NodeJS or a web browser.
-
-ShareJS currently supports operational transform on plain-text and arbitrary JSON data.
-
-**Immerse yourself in [API Documentation](https://github.com/josephg/ShareJS/wiki).**
-
-**Visit [Google groups](https://groups.google.com/forum/?fromgroups#!forum/sharejs) for discussions and announcements**
-
-**Check out the [live interactive demos](http://sharejs.org/).**
-
-> Note: CI sometimes breaks for random reasons even though the tests work locally. Don't stress!
-[![Build Status](https://secure.travis-ci.org/josephg/ShareJS.png)](http://travis-ci.org/josephg/ShareJS)
-
-
-Browser support
----------------
-
-ShareJS **should** work with all of them ![logos of all of all the browsers](http://twitter.github.com/bootstrap/assets/img/browsers.png)
-
-That said, I only test regularly with FF, Safari and Chrome, and occasionally with IE8+. **File bug reports if you have issues**
-
-
-Installing and running
-----------------------
-
-    # npm install share
-
-Run the examples with:
-
-    # sharejs-exampleserver
-
-If you want redis support, you'll need to install redis:
-
-    # sudo brew install redis
-    # npm install -g redis
-
-### From source
-
-Install redis (optional)
-    
-* Mac:
-
-        # sudo brew install redis
-
-* Linux:
-   
-        # sudo apt-get install redis
-
-Then:
-
-    # git clone git://github.com/josephg/ShareJS.git
-    # cd ShareJS
-    # npm install redis   # If you want redis support
-    # npm link
-
-Run the tests:
-
-    # cake test
-
-Build the coffeescript into .js:
-
-    # cake build
-    # cake webclient
-
-Run the example server:
-
-    # bin/exampleserver
-
-Running a server
-----------------
-
-There are two ways to run a sharejs server:
-
-1. Embedded in a node.js server app:
-
-    ```javascript
-    var connect = require('connect'),
-        sharejs = require('share').server;
-
-    var server = connect(
-          connect.logger(),
-          connect.static(__dirname + '/my_html_files')
-        );
-
-    var options = {db: {type: 'memory'}}; // See docs for options. {type: 'redis'} to enable persistance.
-
-    // Attach the sharejs REST and Socket.io interfaces to the server
-    sharejs.attach(server, options);
-
-    server.listen(8000);
-    console.log('Server running at http://127.0.0.1:8000/');
-    ```
-    The above script will start up a ShareJS server on port 8000 which hosts static content from the `my_html_files` directory. See [bin/exampleserver](https://github.com/josephg/ShareJS/blob/master/bin/exampleserver) for a more complex configuration example.
-
-    > See the [Connect](http://senchalabs.github.com/connect/) or [Express](http://expressjs.com/) documentation for more complex routing.
-
-2. From the command line:
-
-        # sharejs
-    Configuration is pulled from a configuration file that can't be easily edited at the moment. For now, I recommend method #1 above.
-
-3. If you are just mucking around, run:
-
-        # sharejs-exampleserver
-  
-    This will run a simple server on port 8000, and host all the example code there. Run it and check out http://localhost:8000/ . The example server stores everything in ram, so don't get too attached to your data.
-
-    > If you're running sharejs from source, you can launch the example server by running `bin/exampleserver`.
-
-
-Putting Share.js on your website
---------------------------------
-
-If you want to get a simple editor working in your webpage with sharejs, here's what you need to do:
-
-First, get an ace editor on your page:
-
-```html
-<div id="editor"></div>
-```
-
-Your web app will need access to the following JS files:
-
-- Ace (http://ace.ajax.org/)
-- SocketIO (http://socket.io/).
-- ShareJS client and ace bindings.
-
-Add these script tags:
-
-```html
-<script src="http://ajaxorg.github.com/ace/build/src/ace.js"></script>
-<script src="/socket.io/socket.io.js"></script>
-<script src="/share/share.js"></script>
-<script src="/share/ace.js"></script>
-```
-
-And add this code:
-
-```html
-<script>
-    var editor = ace.edit("editor");
-
-    sharejs.open('hello', 'text', function(error, doc) {
-        doc.attach_ace(editor);
-    });
-</script>
-```
-
-> **NOTE:** If you're using the current version in npm (0.4) or earler, the argument order is the other way around (`function(doc, error)`).
-
-Thats about it :)
-
-The easiest way to get your code running is to check sharejs out from source and put your html and css files in the `examples/` directory. Run `bin/exampleserver` to launch the demo server and browse to http://localhost:8000/your-app.html .
-
-See the [wiki](https://github.com/josephg/ShareJS/wiki) for documentation.
-
-Its also possible to use sharejs without ace. See the textarea example for details.
-
-Writing a client using node.js
-------------------------------
-
-The client API is the same whether you're using the web or nodejs.
-
-Here's an example application which opens a document and inserts some text in it. Every time an op is applied to the document, it'll print out the document's version.
-
-Run this from a couple terminal windows when sharejs is running to see it go.
-
-```javascript
-var client = require('share').client;
-
-// Open the 'hello' document, which should have type 'text':
-client.open('hello', 'text', 'http://localhost:8000/sjs', function(error, doc) {
-    // Insert some text at the start of the document (position 0):
-    doc.insert("Hi there!\n", 0);
-
-    // Get the contents of the document for some reason:
-    console.log(doc.snapshot);
-
-    doc.on('change', function(op) {
-        console.log('Version: ' + doc.version);
-    });
-
-    // Close the doc if you want your node app to exit cleanly
-    // doc.close();
-});
-```
-
-> **NOTE:** If you're using the current version in npm (0.4) or earler, the argument order is the other way around (`function(doc, error)`).
-
-See [`the wiki`](https://github.com/josephg/ShareJS/wiki) for API documentation, and `examples/node*` for some more example apps.
-
-
+Original project is Joseph Gentle's [`ShareJS`](https://github.com/josephg/ShareJS)
+
+This branch adds data type for formatted text.
+
+The document is represented as:
+[
+    {
+        t: "A fragment of a fat"
+        params:
+            bold: true
+            font-size: 14
+    }
+    {
+        t: "Fragment of an inclined"
+        params: {italic: true}
+    }
+]
+
+Parameters is key-value pairs and can only be replaced.
+
+Available actions:
+    * Insert text
+        p: # 9 position, which will be inserted into the text
+        t: "bold" pasted text
+        params: # Options pasted text
+            bold: true
+            font-size: 14
+    * Removal of text
+        p: 8 # The position at which to start the deleted text
+        t: "Fragment" Exhaust text (need to invert the operation)
+        params: {italic: true} # Options to delete the text (need to invert the operation
+    * Insert format
+        p: # 5 position, which begins with a change in format
+        fc: 4 # Number of characters for which the format is changed
+        paramsi: # parameter is added (no more than one per transaction)
+            font: 14
+    * Remove formatting
+        p: # 5 position, which begins with a change in format
+        fc: 4 # Number of characters for which the format is changed
+        paramsd: # Removed settings (no more than one per transaction)
+            bold: true
+
+Transformation of the text insertion and deletion of text to each other are obvious, they
+copied from the behavior of the string operations ShareJS.
+The operation insert text in the transformation perfectly against the change operation
+parameters does not change, that is, it does not get the new settings.
+Consequently, the operation changes the parameters of the transformation against
+perfect insert operation does not change either split into two operations.
+The operation of removing the text in the transformation of the operation against the perfect
+parameter changes alter their settings to be able to be
+applied.
+The operation of parameters in the transformation of the operation against the perfect
+deletion changes its position and length.
+Finally, the mutual transformation of the two operations, changes in the parameters does not change
+Nothing, if they operate on different parameters. If they do one and
+However, the change is one of the operations will be reduced or removed altogether. If
+Both transactions change the same parameter, but different values, one of the
+operations will be reduced (on the server side decision is in favor of the
+incoming transactions on the client - in favor of already perfect).
+
+Throughout the code, the following notation:
+    p, pos: position, measured from the beginning of the document
+    offset: position, measured from the beginning of the block format
+    index: the index of the block formatting
+In the operations of the notation:
+    t: text, is opposed to the original s - string
+    params: parameters linked to the text
+    i: insert, insert
+    d: delete, delete
+    p: position, measured from the beginning of the document
+    len: the length is indicated only for operations that can not be calculated
+
+
+Check also google group about rich text formatting using OT here: http://groups.google.com/group/sharejs/browse_thread/thread/f973fd957e34448e
