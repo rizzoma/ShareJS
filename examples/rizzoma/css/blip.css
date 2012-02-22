@@ -1,0 +1,354 @@
+#rizzoma {
+    clear: both;
+    display: block;
+    outline: 0;
+    margin: 20px;
+    position: relative;
+    text-align: left;
+    white-space: pre-wrap;
+    border-radius: 5px;
+    border: 1px solid #57AAD9;
+    min-height: 32px;
+    background-color: white;
+}
+
+#editor {
+    position: relative; /* important for link popup */
+    height: 500px;
+    overflow: scroll;
+}
+
+/**
+ * Стили для тени блипа
+ */
+
+.blip-contents, .blip-contents.dialogue-container {
+     box-shadow: 0 3px 13px -3px rgba(0,0,0,0.3);
+    -moz-box-shadow: 0 3px 13px -3px rgba(0,0,0,0.3);
+    -webkit-box-shadow: 0 3px 13px -3px rgba(0,0,0,0.3);
+}
+
+.root-blip > * > .blip-contents, .blip-contents.dialogue-container.dialogue, .blip-contents.dialogue {
+    box-shadow: none;
+    -moz-box-shadow: none;
+    -webkit-box-shadow: none;
+}
+
+/**
+ * Стрелочки на блипах
+ */
+.blip-arrow {
+    position: absolute;
+    height: 14px;
+    width: 8px;
+    left: -8px;
+    overflow: hidden;
+}
+
+.blip-arrow div {
+    -moz-transform: rotate(45deg);
+    -webkit-transform: rotate(45deg);
+    margin-left: 3px;
+    height: 12px;
+    width: 11px;
+    border: 1px solid #D6D6D6;
+    background: white;
+}
+
+.blip-container.active > * > .blip-contents > .blip-arrow div {
+    border-color: #57AAD9;
+}
+
+.blip-contents.dialogue-container.dialogue {
+    display: block;
+}
+
+.blip-contents.dialogue > .blip-arrow {
+    display: none;
+}
+
+.editor {
+    outline: none;
+    margin: 0;
+    counter-reset: numbered;
+}
+
+.editor > p {
+    margin: 0;
+}
+
+.editor > .clear-counter {
+    counter-reset: numbered;
+}
+
+.editor > .bulleted::before {
+    display: inline;
+    position: absolute;
+    left: 0;
+    font-size: 18px;
+}
+
+.editor > .bulleted-type0::before {
+    content: '•';
+}
+
+.editor > .bulleted-type1::before {
+    content: '◦';
+}
+
+.editor > .bulleted-type2::before {
+    content: '▪';
+}
+
+.editor > .bulleted-type3::before {
+    content: '▫';
+}
+
+.editor > .bulleted-type4::before {
+    content: '·';
+    top: -1px;
+}
+
+.editor > .bulleted {
+    position: relative;
+    padding-left: 10px;
+}
+
+.editor > .numbered::before {
+    counter-increment: numberred;
+    content: counter(number) " ";
+    display: inline;
+}
+
+.js-attachment-editor {
+    position: absolute;
+    left: -1000px;
+    top: -1000px;
+    background: #ffffff;
+}
+
+.attachment-content {
+    background-image: linear-gradient(top, rgb(192,192,192) 0%, rgb(192,192,192) 5%, rgb(255,255,255) 75%);
+    background-image: -o-linear-gradient(top, rgb(192,192,192) 0%, rgb(192,192,192) 5%, rgb(255,255,255) 75%);
+    background-image: -moz-linear-gradient(top, rgb(192,192,192) 0%, rgb(192,192,192) 5%, rgb(255,255,255) 75%);
+    background-image: -webkit-linear-gradient(top, rgb(192,192,192) 0%, rgb(192,192,192) 5%, rgb(255,255,255) 75%);
+    background-image: -ms-linear-gradient(top, rgb(192,192,192) 0%, rgb(192,192,192) 5%, rgb(255,255,255) 75%);
+    background-image: -webkit-gradient(
+        linear,
+        left top,
+        left bottom,
+        color-stop(0, rgb(192,192,192)),
+        color-stop(0.05, rgb(192,192,192)),
+        color-stop(0.75, rgb(255,255,255))
+    );
+    display: inline-block;
+    margin-top: 5px;
+}
+
+.attachment-preview {
+    border: 1px solid silver;
+    max-height: 120px;
+    max-width: 200px;
+    padding: 5px;
+}
+
+
+/**
+ *  Всплывающее меню блипа
+ */
+
+.blip-menu-sign {
+    display: none;
+    width: 10px;
+    height: 5px;
+    background: url(/s/img/blip_menu_sign.png);
+}
+
+.blip-menu-item {
+    color: #fff;
+    float: left;
+    padding: 1px 8px 0 8px;
+    cursor: pointer;
+}
+
+.blip-menu-item.send-message {
+    background: #393;
+    border-radius: 0 3px 3px 0;
+    height: 98%;
+    display: none;
+    width: 90px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.blip-menu-item.send-message.sent {
+    background: #5CAAF7;
+}
+
+.blip-menu-item.send-message.sent:hover {
+    background: #339933;
+}
+
+.blip-menu-container {
+    position: absolute;
+    background: #5CAAF7;
+    border-radius: 3px;
+    height: 20px;
+    top: -7px;
+    left: -1px;
+    display: none;
+    z-index: 1;
+}
+
+.is-folded-by-default-label {
+    display: block;
+}
+
+.is-folded-by-default-label input {
+    margin-left: 0;
+}
+
+.is-folded-by-default-box.active {
+    text-decoration: underline;
+}
+
+.contributors .contributor {
+    width: 27px;
+    height: 27px;
+    display: block;
+    float: right;
+    margin-left: 5px;
+    margin-bottom: 5px;
+    border: 1px solid #fff;
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: center;
+    border-radius: 3px;
+}
+
+.blip-container.active > * > .blip-contents > .blip-reply-button {
+    display: block;
+}
+
+.blip-reply-button {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    background: #57AAD9;
+    color: white;
+    border-radius: 5px 0 3px;
+    padding: 1px 10px 0;
+    font-weight: bold;
+    font-size: 11px;
+    cursor: pointer;
+    display: none;
+}
+
+.contributors .contributor:first-child {
+    border-color: #57AAD9;
+}
+
+.blip-menu .url {
+    padding-left: 10px;
+    padding-right: 10px;
+    outline: none;
+    height: 24px;
+    border-radius: 10px;
+    border: 1px solid #D6D6D6;
+    margin-bottom: 10px;
+    margin-top: 10px;
+}
+
+/**
+ * Индикатор непрочитанности блипа
+ */
+.unread-indicator {
+    background-color: #89E340;
+    width: 3px;
+    position: absolute;
+    top: -6px;
+    bottom: 4px;
+}
+
+/* Закрашивает кусочек индикатора прочитанности для диалоговых блипов */
+.blip-contents .dialogue::before {
+    content: "";
+    position: absolute;
+    background-color: white;
+    top: -4px;
+    height: 3px;
+}
+
+.blip-contents .dialogue::before, .unread-indicator {
+    left: 3px;
+    width: 3px;
+}
+
+.autocomplete-input {
+    border: 0;
+    outline: none;
+    margin: 0 3px;
+    padding: 1px 0 1px 15px;
+}
+
+.add-more-container {
+    background: #FFFFFF;
+    border: 1px solid #000;
+    padding: 0 7px 0 2px;
+    position: relative;
+}
+
+.add-more-container,
+.blip-recipient {
+    display: inline-block;
+    margin: 1px;
+}
+
+.blip-recipient-text {
+    color: #5CAAF7;
+}
+
+.blip-recipient {
+    padding: 0 3px;
+    background: #eaeaea;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.blip-recipient .blip-recipient-text {
+    margin:  0 3px 0 0;
+}
+
+/*
+
+Попап для копирования ссылки на блип
+*/
+
+.copy-blip-link input {
+    border: 1px solid #ccc;
+    padding: 2px;
+}
+
+.link-popup {
+    background-color: #FFF;
+    border-top: 1px solid #E0E0E0;
+    border-radius: 3px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    position: absolute;
+    white-space: nowrap;
+    z-index: 10;
+}
+
+.link-popup a {
+    display: inline-block;
+    margin: 0 10px;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.link-popup .button {
+    margin: 3px;
+}

@@ -19,6 +19,7 @@ client = [
 	'types/helpers'
 	'types/text'
 	'types/text-api'
+	'types/text-formatted'
 	'client/doc'
 	'client/connection'
 	'client/index'
@@ -80,15 +81,17 @@ buildtype = (name) ->
 	compile filenames, "webclient/#{name}"
 
 task 'webclient', 'Build the web client into one file', ->
-	compile client, 'webclient/share'
-	buildtype 'json'
-	buildtype 'text-tp2'
+    compile client, 'webclient/share'
+    buildtype 'json'
+    buildtype 'text-tp2'
 
-	# TODO: This should also be closure compiled.
-	extrafiles = expandNames extras
-	e "coffee --compile --output webclient/ #{extrafiles}", ->
-		# For backwards compatibility. (The ace.js file used to be called share-ace.js)
-		e "cp webclient/ace.js webclient/share-ace.js"
+    # TODO: This should also be closure compiled.
+    extrafiles = expandNames extras
+    e "coffee --compile --output webclient/ #{extrafiles}", ->
+        # For backwards compatibility. (The ace.js file used to be called share-ace.js)
+        e "cp webclient/ace.js webclient/share-ace.js"
+
+    e "node_modules/.bin/browserify src/client/rizzoma/index.coffee -o webclient/rizzoma.js"
 
 #task 'lightwave', ->
 #	buildclosure ['client/web-prelude', 'client/microevent', 'types/text-tp2'], 'lightwave'

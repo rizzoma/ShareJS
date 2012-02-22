@@ -1,5 +1,5 @@
 (function() {
-  var BCSocket, Connection, Doc, MicroEvent, append, bootstrapTransform, checkValidComponent, checkValidOp, exports, invertComponent, nextTick, strInject, text, transformComponent, transformPosition, types,
+  var BCSocket, Connection, Doc, FormattedText, MicroEvent, append, bootstrapTransform, checkValidComponent, checkValidOp, clone, exports, invertComponent, nextTick, strInject, text, transformComponent, transformPosition, types,
     __slice = Array.prototype.slice,
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     __indexOf = Array.prototype.indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
@@ -373,54 +373,853 @@
 
   if (typeof WEB === 'undefined') text = require('./text');
 
-  text['api'] = {
-    'provides': {
-      'text': true
+  text.api = {
+    provides: {
+      text: true
     },
-    'getLength': function() {
+    getLength: function() {
       return this.snapshot.length;
     },
-    'getText': function() {
+    getText: function() {
       return this.snapshot;
     },
-    'insert': function(pos, text, callback) {
+    insert: function(pos, text, callback) {
       var op;
       op = [
         {
-          'p': pos,
-          'i': text
+          p: pos,
+          i: text
         }
       ];
       this.submitOp(op, callback);
       return op;
     },
-    'del': function(pos, length, callback) {
+    del: function(pos, length, callback) {
       var op;
       op = [
         {
-          'p': pos,
-          'd': this.snapshot.slice(pos, (pos + length))
+          p: pos,
+          d: this.snapshot.slice(pos, (pos + length))
         }
       ];
       this.submitOp(op, callback);
       return op;
     },
-    '_register': function() {
+    _register: function() {
       return this.on('remoteop', function(op) {
         var component, _i, _len, _results;
         _results = [];
         for (_i = 0, _len = op.length; _i < _len; _i++) {
           component = op[_i];
-          if (component['i'] !== void 0) {
-            _results.push(this.emit('insert', component['p'], component['i']));
+          if (component.i !== void 0) {
+            _results.push(this.emit('insert', component.p, component.i));
           } else {
-            _results.push(this.emit('delete', component['p'], component['d']));
+            _results.push(this.emit('delete', component.p, component.d));
           }
         }
         return _results;
       });
     }
   };
+
+  /*
+  Текстовые операции с форматированием.
+  Документ представляется в виде:
+  [
+      {
+          t: "Фрагмент жирный"
+          params:
+              bold: true
+              font-size: 14
+      }
+      {
+          t: "Фрагмент наклонный"
+          params: {italic: true}
+      }
+  ]
+  
+  Параметры представляется парами ключ-значение и могут только заменяться.
+  
+  Доступные операции:
+      * вставка текста
+          p: 9                    # Позиция, в которую будет вставляться текст
+          t: "жирный"             # Вставляемый текст
+          params:                 # Параметры вставляемого текста
+              bold: true
+              font-size: 14    
+      * удаление текста
+          p: 8                    # Позиция, с которой начинается удаляемый текст
+          t: "Фрагмент"           # Удаляемый текст (нужен для инвертирования операции)
+          params: {italic: true}  # Параметры удаляемого текста (нужны для инвертирования операции
+      * вставка форматирования
+          p: 5                    # Позиция, с которой начинается изменение форматирования
+          fc: 4                   # Количество символов, для которых изменяется форматирование
+          paramsi:                # Добавляемый параметр (не более одного за операцию)
+              font: 14
+      * удаление форматирования
+          p: 5                    # Позиция, с которой начинается изменение форматирования
+          fc: 4                   # Количество символов, для которых изменяется форматирование
+          paramsd:                # Удаляемые параметры (не более одного за операцию)
+              bold: true
+  
+  Трансформации вставки текста и удаления текста между собой очевидны, их
+  поведение скопировано со строковых операций из ShareJS.
+  Операция вставки текста при трансформации против совершенной операции изменения
+  параметров не меняется, то есть она не получает новых параметров.
+  Следовательно, операция изменения параметров при трансформации против
+  совершенной операции вставки не меняется либо разбивается на две операции.
+  Операция удаления текста при трансформации против совершенной операции
+  изменения параметров изменяет свои параметры, чтобы иметь возможность быть
+  примененной.
+  Операция изменения параметров при трансформации против совершенной операции
+  удаления изменяет свои позицию и длину.
+  Наконец, взаимная трансформации двух операций изменения параметров не меняет
+  ничего, если они оперируют разными параметрами. Если они выполняют одно и
+  то же изменение, то одна из операций будет уменьшена либо убрана совсем. Если
+  обе операции изменяют один и тот же параметр, но в разные значения, то одна из
+  операций будет уменьшена (на серверной стороне решение принимается в пользу
+  приходящей операции, на клиентской - в пользу уже совершенной).
+  
+  По всему коду приняты следующие обозначения:
+      p, pos: позиция, отсчитываемая от начала документа
+      offset: позиция, отсчитываемая от начала блока форматирования
+      index: индекс блока с форматированием
+  В операциях приняты обозначения:
+      t: текст, противопоставляется оригинальному s - string 
+      params: параметры, привязанные к тексту
+      i: insert, вставка
+      d: delete, удаление
+      p: позиция, отсчитываемая от начала документа
+      len: длина, указывается только для операций, в которых не может быть вычислена
+  */
+
+  clone = function(o) {
+    return JSON.parse(JSON.stringify(o));
+  };
+
+  FormattedText = (function() {
+
+    function FormattedText() {
+      this._transformParamsdAgainstParamsd = __bind(this._transformParamsdAgainstParamsd, this);
+      this._transformParamsiAgainstParamsi = __bind(this._transformParamsiAgainstParamsi, this);
+      this._transformParamsChangeAgainstParamsChange = __bind(this._transformParamsChangeAgainstParamsChange, this);
+      this._revertParamsChange = __bind(this._revertParamsChange, this);
+      this._transformParamsdAgainstParamsi = __bind(this._transformParamsdAgainstParamsi, this);
+      this._transformParamsiAgainstParamsd = __bind(this._transformParamsiAgainstParamsd, this);
+      this._transformParamsdAgainstTd = __bind(this._transformParamsdAgainstTd, this);
+      this._transformParamsiAgainstTd = __bind(this._transformParamsiAgainstTd, this);
+      this._transformTdAgainstParamsd = __bind(this._transformTdAgainstParamsd, this);
+      this._transformTdAgainstParamsi = __bind(this._transformTdAgainstParamsi, this);
+      this._transformParamsdAgainstTi = __bind(this._transformParamsdAgainstTi, this);
+      this._transformParamsiAgainstTi = __bind(this._transformParamsiAgainstTi, this);
+      this._transformTiAgainstParamsd = __bind(this._transformTiAgainstParamsd, this);
+      this._transformTiAgainstParamsi = __bind(this._transformTiAgainstParamsi, this);
+      this._transformParamsChangeAgainstTd = __bind(this._transformParamsChangeAgainstTd, this);
+      this._transformTdAgainstParamsChange = __bind(this._transformTdAgainstParamsChange, this);
+      this._transformParamsChangeAgainstTi = __bind(this._transformParamsChangeAgainstTi, this);
+      this._transformTiAgainstParamsChange = __bind(this._transformTiAgainstParamsChange, this);
+      this._transformTdAgainstTd = __bind(this._transformTdAgainstTd, this);
+      this._transformTdAgainstTi = __bind(this._transformTdAgainstTi, this);
+      this._transformTiAgainstTd = __bind(this._transformTiAgainstTd, this);
+      this._transformTiAgainstTi = __bind(this._transformTiAgainstTi, this);
+      this._changeParams = __bind(this._changeParams, this);
+      this._applyParamsInsert = __bind(this._applyParamsInsert, this);
+      this._applyParamsDelete = __bind(this._applyParamsDelete, this);
+      this._applyTextDelete = __bind(this._applyTextDelete, this);
+      this._applyTextInsert = __bind(this._applyTextInsert, this);
+    }
+
+    FormattedText.prototype._getBlockAndOffset = function(snapshot, p) {
+      /*
+              Возвращает индекс блока, содержащего символ с номером p, и смещение
+              искомого символа внутри этого блока 
+              @param snapshot: formatted text snapshot
+              @param p: int
+              @return: [int, int] - индекс блока и смещение внутри блока
+      */
+      var block, index, totalLen, _len;
+      totalLen = 0;
+      for (index = 0, _len = snapshot.length; index < _len; index++) {
+        block = snapshot[index];
+        if (totalLen + block.t.length > p) return [index, p - totalLen];
+        totalLen += block.t.length;
+      }
+      if (p > totalLen) {
+        throw new Error("Specified position (" + p + ") is more then text length (" + totalLen + ")");
+      }
+      return [snapshot.length, p - totalLen];
+    };
+
+    FormattedText.prototype._paramsAreEqual = function(first, second) {
+      /*
+              Возвращает true, если переданный объекты форматирования совпадают
+              @param first: object
+              @param second: object
+              @return: boolean
+      */
+      var _secondHasFirst;
+      _secondHasFirst = function(first, second) {
+        var key;
+        for (key in first) {
+          if (!(second[key] != null)) return false;
+          if (first[key] !== second[key]) return false;
+        }
+        return true;
+      };
+      if (!_secondHasFirst(first, second)) return false;
+      if (!_secondHasFirst(second, first)) return false;
+      return true;
+    };
+
+    FormattedText.prototype._splitBlock = function(block, offset) {
+      /*
+              Разбивает указанный блок
+              @param block: Formatted text block
+              @param offset: int
+              @return: [Formatted text block]
+      */
+      var newBlock;
+      if (offset === 0) return [block];
+      newBlock = clone(block);
+      block.t = block.t.substr(0, offset);
+      newBlock.t = newBlock.t.substr(offset);
+      return [block, newBlock];
+    };
+
+    FormattedText.prototype._tryMerge = function(snapshot, startIndex, endIndex) {
+      /*
+              Пробует слить все смежные блоки с одинаковым форматированием между
+              startIndex и endIndex включительно.
+              Изменяет snapshot.
+              startIndex должен быть меньше endIndex.
+              Позволяется указывать startIndex < 0 и endIndex > snapshot.length - 1
+              @param snapshot: [Formatted text block]
+              @param startIndex: int
+              @param endIndex: int
+      */
+      var first, i, second, _ref, _ref2, _results;
+      startIndex = Math.max(startIndex, 0);
+      endIndex = Math.min(endIndex, snapshot.length - 1);
+      i = endIndex - 1;
+      _results = [];
+      while (i >= startIndex) {
+        first = snapshot[i];
+        second = snapshot[i + 1];
+        if (this._paramsAreEqual(first.params, second.params)) {
+          [].splice.apply(snapshot, [(_ref = i + 1), (i + 1) - _ref + 1].concat(_ref2 = [])), _ref2;
+          first.t += second.t;
+        }
+        _results.push(i--);
+      }
+      return _results;
+    };
+
+    FormattedText.prototype._applyTextInsert = function(snapshot, op) {
+      var block, blockIndex, blocks, newBlock, offset, _ref, _ref2;
+      snapshot = clone(snapshot);
+      _ref = this._getBlockAndOffset(snapshot, op.p), blockIndex = _ref[0], offset = _ref[1];
+      if (snapshot.length === blockIndex) {
+        snapshot.push({
+          t: op.ti,
+          params: op.params
+        });
+        this._tryMerge(snapshot, blockIndex - 1, blockIndex);
+        return snapshot;
+      }
+      block = snapshot[blockIndex];
+      if (this._paramsAreEqual(block.params, op.params)) {
+        block.t = block.t.substr(0, offset) + op.ti + block.t.substr(offset);
+      } else {
+        blocks = this._splitBlock(block, offset);
+        newBlock = {
+          t: op.ti,
+          params: op.params
+        };
+        [].splice.apply(blocks, [(_ref2 = blocks.length - 1), (blocks.length - 1) - _ref2].concat(newBlock)), newBlock;
+        [].splice.apply(snapshot, [blockIndex, blockIndex - blockIndex + 1].concat(blocks)), blocks;
+        this._tryMerge(snapshot, blockIndex - 1, blockIndex);
+      }
+      return snapshot;
+    };
+
+    FormattedText.prototype._applyTextDelete = function(snapshot, op) {
+      var block, blockIndex, blockText, offset, _ref, _ref2;
+      snapshot = clone(snapshot);
+      _ref = this._getBlockAndOffset(snapshot, op.p), blockIndex = _ref[0], offset = _ref[1];
+      block = snapshot[blockIndex];
+      if (!this._paramsAreEqual(block.params, op.params)) {
+        throw new Error("Text block params (" + (JSON.stringify(block.params)) + ") do not equal to op params (" + (JSON.stringify(op.params)) + ")");
+      }
+      blockText = block.t.substr(offset, op.td.length);
+      if (blockText !== op.td) {
+        throw new Error("Deleted text (" + blockText + ") is not equal to text in operation (" + op.td + ")");
+      }
+      block.t = block.t.substr(0, offset) + block.t.substr(offset + op.td.length);
+      if (!block.t) {
+        [].splice.apply(snapshot, [blockIndex, blockIndex - blockIndex + 1].concat(_ref2 = [])), _ref2;
+        this._tryMerge(snapshot, blockIndex - 1, blockIndex);
+      }
+      return snapshot;
+    };
+
+    FormattedText.prototype._getFirstParam = function(params) {
+      /*
+              Возвращает [key, value] для первого ключа из params
+              @param params: object
+              @return: [string, any]
+      */
+      var name, value;
+      for (name in params) {
+        value = params[name];
+        return [name, value];
+      }
+    };
+
+    FormattedText.prototype._deleteParams = function(params, toDelete) {
+      var name, value, _ref;
+      _ref = this._getFirstParam(toDelete), name = _ref[0], value = _ref[1];
+      if (params[name] !== value) {
+        throw new Error("Params delete tried to remove param " + name + " with value " + value + " from " + (JSON.stringify(params)) + ", but it does not match");
+      }
+      return delete params[name];
+    };
+
+    FormattedText.prototype._applyParamsDelete = function(snapshot, op) {
+      var transformBlock,
+        _this = this;
+      if (Object.keys(op.paramsd).length !== 1) {
+        throw new Error("Exactly one param should be deleted: " + (JSON.stringify(op)));
+      }
+      transformBlock = function(block) {
+        return _this._deleteParams(block.params, op.paramsd);
+      };
+      return this._changeParams(snapshot, op.p, op.len, transformBlock);
+    };
+
+    FormattedText.prototype._insertParams = function(params, toInsert) {
+      var name, value, _ref;
+      _ref = this._getFirstParam(toInsert), name = _ref[0], value = _ref[1];
+      if (params[name] != null) {
+        throw new Error("Params insert tried to set param " + name + " with value " + value + " to block " + (JSON.stringify(params)) + ", but it is already set");
+      }
+      return params[name] = value;
+    };
+
+    FormattedText.prototype._applyParamsInsert = function(snapshot, op) {
+      var transformBlock,
+        _this = this;
+      if (Object.keys(op.paramsi).length !== 1) {
+        throw new Error("Exactly one param should be inserted: " + (JSON.stringify(op)));
+      }
+      transformBlock = function(block) {
+        return _this._insertParams(block.params, op.paramsi);
+      };
+      return this._changeParams(snapshot, op.p, op.len, transformBlock);
+    };
+
+    FormattedText.prototype._changeParams = function(snapshot, p, len, transformBlock) {
+      /*
+              Применяет операцию изменения параметров на диапазоне
+              Разбивает при необходимости существующие блоки
+              Ко всем блокам, попадающим в диапазон, применяет transformBlock
+              Сливает блоки после изменения форматирования
+              @param snapshot: any data
+              @param p: int, позиция начала изменения параметров от начала документа
+              @param len: int, длина диапазона изменения параметров
+              @param transformBlock: function, функция, изменяющая параметры
+      */
+      var endBlockIndex, endOffset, i, startBlockIndex, startOffset, _ref, _ref2, _ref3, _ref4;
+      snapshot = clone(snapshot);
+      _ref = this._getBlockAndOffset(snapshot, p), startBlockIndex = _ref[0], startOffset = _ref[1];
+      _ref2 = this._getBlockAndOffset(snapshot, p + len), endBlockIndex = _ref2[0], endOffset = _ref2[1];
+      if (endOffset === 0) {
+        endBlockIndex--;
+      } else {
+        [].splice.apply(snapshot, [endBlockIndex, endBlockIndex - endBlockIndex + 1].concat(_ref3 = this._splitBlock(snapshot[endBlockIndex], endOffset))), _ref3;
+      }
+      if (startOffset > 0) {
+        [].splice.apply(snapshot, [startBlockIndex, startBlockIndex - startBlockIndex + 1].concat(_ref4 = this._splitBlock(snapshot[startBlockIndex], startOffset))), _ref4;
+        startBlockIndex++;
+        endBlockIndex++;
+      }
+      for (i = startBlockIndex; startBlockIndex <= endBlockIndex ? i <= endBlockIndex : i >= endBlockIndex; startBlockIndex <= endBlockIndex ? i++ : i--) {
+        transformBlock(snapshot[i]);
+      }
+      this._tryMerge(snapshot, startBlockIndex - 1, endBlockIndex + 1);
+      return snapshot;
+    };
+
+    FormattedText.prototype._transformPosAgainstInsert = function(p, start, len, shiftIfEqual) {
+      /*
+              Изменяет позицию p с учетом того, что в позицию start была вставлена
+              строка длины len
+              @param p: int
+              @param start: int
+              @param len: int
+              @param shiftIfEqual: boolean, сдвигать ли p при p == start
+              @return: int
+      */      if (start > p) return p;
+      if (start === p && !shiftIfEqual) return p;
+      return p + len;
+    };
+
+    FormattedText.prototype._transformPosAgainstDelete = function(p, start, len) {
+      /*
+              Изменяет позицию p с учетом того, что из позиции start была удалена
+              строка длины len
+              @param p: int
+              @param start: int
+              @param len: int
+              @return: int
+      */      if (p > start + len) return p - len;
+      if (p > start) return start;
+      return p;
+    };
+
+    FormattedText.prototype._transformTiAgainstTi = function(dest, op1, op2, type) {
+      op1 = clone(op1);
+      op1.p = this._transformPosAgainstInsert(op1.p, op2.p, op2.ti.length, type === 'right');
+      dest.push(op1);
+      return dest;
+    };
+
+    FormattedText.prototype._transformTiAgainstTd = function(dest, op1, op2) {
+      op1 = clone(op1);
+      op1.p = this._transformPosAgainstDelete(op1.p, op2.p, op2.td.length);
+      dest.push(op1);
+      return dest;
+    };
+
+    FormattedText.prototype._transformTdAgainstTi = function(dest, op1, op2) {
+      var stringToDelete;
+      stringToDelete = op1.td;
+      if (op1.p < op2.p) {
+        dest.push({
+          p: op1.p,
+          td: stringToDelete.slice(0, (op2.p - op1.p)),
+          params: clone(op1.params)
+        });
+        stringToDelete = stringToDelete.slice(op2.p - op1.p);
+      }
+      if (stringToDelete) {
+        dest.push({
+          p: op1.p + op2.ti.length,
+          td: stringToDelete,
+          params: clone(op1.params)
+        });
+      }
+      return dest;
+    };
+
+    FormattedText.prototype._transformTdAgainstTd = function(dest, op1, op2) {
+      var intersectEnd, intersectStart, newOp, op1Intersect, op2Intersect;
+      if (op1.p >= op2.p + op2.td.length) {
+        dest.push({
+          p: op1.p - op2.td.length,
+          td: op1.td,
+          params: clone(op1.params)
+        });
+      } else if (op1.p + op1.td.length <= op2.p) {
+        dest.push(clone(op1));
+      } else {
+        if (!this._paramsAreEqual(op1.params, op2.params)) {
+          throw new Error("Two text delete operations overlap but have different params: " + (JSON.stringify(op1)) + ", " + (JSON.stringify(op2)));
+        }
+        intersectStart = Math.max(op1.p, op2.p);
+        intersectEnd = Math.min(op1.p + op1.td.length, op2.p + op2.td.length);
+        op1Intersect = op1.td.slice(intersectStart - op1.p, (intersectEnd - op1.p));
+        op2Intersect = op2.td.slice(intersectStart - op2.p, (intersectEnd - op2.p));
+        if (op1Intersect !== op2Intersect) {
+          throw new Error("Delete ops delete different text in the same region of the document: " + (JSON.stringify(op1)) + ", " + (JSON.stringify(op2)));
+        }
+        newOp = {
+          td: '',
+          p: op1.p,
+          params: clone(op1.params)
+        };
+        if (op1.p < op2.p) newOp.td = op1.td.slice(0, (op2.p - op1.p));
+        if (op1.p + op1.td.length > op2.p + op2.td.length) {
+          newOp.td += op1.td.slice(op2.p + op2.td.length - op1.p);
+        }
+        if (newOp.td) {
+          newOp.p = this._transformPosAgainstDelete(newOp.p, op2.p, op2.td.length);
+          dest.push(newOp);
+        }
+      }
+      return dest;
+    };
+
+    FormattedText.prototype._transformTiAgainstParamsChange = function(dest, op1, op2) {
+      dest.push(clone(op1));
+      return dest;
+    };
+
+    FormattedText.prototype._transformParamsChangeAgainstTi = function(dest, op1, op2) {
+      var lenBeforeInsert, lenToChange, newOp;
+      lenToChange = op1.len;
+      if (op1.p < op2.p) {
+        lenBeforeInsert = Math.min(lenToChange, op2.p - op1.p);
+        newOp = clone(op1);
+        newOp.len = lenBeforeInsert;
+        dest.push(newOp);
+        lenToChange -= lenBeforeInsert;
+      }
+      if (lenToChange) {
+        newOp = clone(op1);
+        newOp.p = Math.max(op2.p, op1.p) + op2.ti.length;
+        newOp.len = lenToChange;
+        dest.push(newOp);
+      }
+      return dest;
+    };
+
+    FormattedText.prototype._transformTdAgainstParamsChange = function(dest, op1, op2, transformParams) {
+      /*
+              Трансформирует операцию удаления текста против операции изменения
+              параметров
+              @param dest: array
+              @param op1: text delete OT operation
+              @param op2: paramsi or paramsd OT operation
+              @param transformParams: function, функция, изменяющая параметры соответственно op2
+                  transformParams(params, op2)
+              @return: dest
+      */
+      var commonLen, newOp, strToDelete;
+      if ((op1.p >= op2.p + op2.len) || (op1.p + op1.td.length <= op2.p)) {
+        dest.push(clone(op1));
+        return dest;
+      }
+      strToDelete = op1.td;
+      if (op1.p < op2.p) {
+        newOp = clone(op1);
+        newOp.td = strToDelete.slice(0, (op2.p - op1.p));
+        dest.push(newOp);
+        strToDelete = strToDelete.slice(op2.p - op1.p);
+      }
+      newOp = clone(op1);
+      commonLen = op2.p + op2.len - Math.max(op2.p, op1.p);
+      newOp.td = strToDelete.slice(0, commonLen);
+      transformParams(newOp.params, op2);
+      strToDelete = strToDelete.slice(commonLen);
+      dest.push(newOp);
+      if (strToDelete) {
+        newOp = clone(op1);
+        newOp.td = strToDelete;
+        dest.push(newOp);
+      }
+      return dest;
+    };
+
+    FormattedText.prototype._transformParamsChangeAgainstTd = function(dest, op1, op2) {
+      var newOp;
+      if (op1.p >= op2.p + op2.td.length) {
+        newOp = clone(op1);
+        op1.p -= op2.td.length;
+        dest.push(newOp);
+      } else if (op1.p + op1.len <= op2.p) {
+        dest.push(clone(op1));
+      } else {
+        newOp = clone(op1);
+        newOp.len = 0;
+        if (op1.p < op2.p) newOp.len = Math.min(op1.len, op2.p - op1.p);
+        if (op1.p + op1.len > op2.p + op2.td.length) {
+          newOp.len += (op1.p + op1.len) - (op2.p + op2.td.length);
+        }
+        if (newOp.len) {
+          newOp.p = this._transformPosAgainstDelete(newOp.p, op2.p, op2.td.length);
+          dest.push(newOp);
+        }
+      }
+      return dest;
+    };
+
+    FormattedText.prototype._transformTiAgainstParamsi = function() {
+      var args;
+      args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
+      return this._transformTiAgainstParamsChange.apply(this, args);
+    };
+
+    FormattedText.prototype._transformTiAgainstParamsd = function() {
+      var args;
+      args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
+      return this._transformTiAgainstParamsChange.apply(this, args);
+    };
+
+    FormattedText.prototype._transformParamsiAgainstTi = function() {
+      var args;
+      args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
+      return this._transformParamsChangeAgainstTi.apply(this, args);
+    };
+
+    FormattedText.prototype._transformParamsdAgainstTi = function() {
+      var args;
+      args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
+      return this._transformParamsChangeAgainstTi.apply(this, args);
+    };
+
+    FormattedText.prototype._transformTdAgainstParamsi = function(dest, op1, op2) {
+      var _this = this;
+      return this._transformTdAgainstParamsChange(dest, op1, op2, function(params, op) {
+        return _this._insertParams(params, op.paramsi);
+      });
+    };
+
+    FormattedText.prototype._transformTdAgainstParamsd = function(dest, op1, op2) {
+      var _this = this;
+      return this._transformTdAgainstParamsChange(dest, op1, op2, function(params, op) {
+        return _this._deleteParams(params, op.paramsd);
+      });
+    };
+
+    FormattedText.prototype._transformParamsiAgainstTd = function() {
+      var args;
+      args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
+      return this._transformParamsChangeAgainstTd.apply(this, args);
+    };
+
+    FormattedText.prototype._transformParamsdAgainstTd = function() {
+      var args;
+      args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
+      return this._transformParamsChangeAgainstTd.apply(this, args);
+    };
+
+    FormattedText.prototype._transformParamsiAgainstParamsd = function(dest, op1, op2) {
+      dest.push(clone(op1));
+      return dest;
+    };
+
+    FormattedText.prototype._transformParamsdAgainstParamsi = function(dest, op1, op2) {
+      dest.push(clone(op1));
+      return dest;
+    };
+
+    FormattedText.prototype._revertParamsChange = function(op) {
+      /*
+              Возвращает операцию, обратную операции форматирования
+              @param op: OT operation
+              @return: OT operation
+      */
+      var res;
+      res = {
+        p: op.p,
+        len: op.len
+      };
+      if (op.paramsi != null) res.paramsd = op.paramsi;
+      if (op.paramsd != null) res.paramsi = op.paramsd;
+      return res;
+    };
+
+    FormattedText.prototype._transformParamsChangeAgainstParamsChange = function(dest, op1, op2, type, firstName, firstValue, secondName, secondValue) {
+      /*
+              Трансформирует операцию изменения параметров относительно уже
+              совершенной операции изменения параметров.
+              @param dest: array
+              @param op1: text delete OT operation
+              @param op2: paramsi or paramsd OT operation
+              @param type: 'left' or 'right'
+              @param firstName: string, имя параметра, изменяемого первой операцией
+              @param secondName: string, имя параметра, изменяемого второй операцией
+              @return: dest
+      */
+      var cancelOp, commonEnd, commonStart, newOp;
+      if ((op1.p >= op2.p + op2.len) || (op1.p + op1.len <= op2.p) || (firstName !== secondName)) {
+        dest.push(clone(op1));
+        return dest;
+      }
+      if (op1.p < op2.p) {
+        newOp = clone(op1);
+        newOp.len = op2.p - op1.p;
+        dest.push(newOp);
+      }
+      if (type === 'left' && firstValue !== secondValue) {
+        commonEnd = Math.min(op2.p + op2.len, op1.p + op1.len);
+        commonStart = Math.max(op1.p, op2.p);
+        cancelOp = this._revertParamsChange(op2);
+        newOp = clone(op1);
+        newOp.p = cancelOp.p = commonStart;
+        newOp.len = cancelOp.len = commonEnd - commonStart;
+        dest.push(cancelOp);
+        dest.push(newOp);
+      }
+      if (op1.p + op1.len > op2.p + op2.len) {
+        newOp = clone(op1);
+        newOp.p = op2.p + op2.len;
+        newOp.len = (op1.p + op1.len) - (op2.p + op2.len);
+        dest.push(newOp);
+      }
+      return dest;
+    };
+
+    FormattedText.prototype._transformParamsiAgainstParamsi = function(dest, op1, op2, type) {
+      var firstName, firstValue, secondName, secondValue, _ref, _ref2;
+      _ref = this._getFirstParam(op1.paramsi), firstName = _ref[0], firstValue = _ref[1];
+      _ref2 = this._getFirstParam(op2.paramsi), secondName = _ref2[0], secondValue = _ref2[1];
+      return this._transformParamsChangeAgainstParamsChange(dest, op1, op2, type, firstName, firstValue, secondName, secondValue);
+    };
+
+    FormattedText.prototype._transformParamsdAgainstParamsd = function(dest, op1, op2, type) {
+      var firstName, firstValue, secondName, secondValue, _ref, _ref2;
+      _ref = this._getFirstParam(op1.paramsd), firstName = _ref[0], firstValue = _ref[1];
+      _ref2 = this._getFirstParam(op2.paramsd), secondName = _ref2[0], secondValue = _ref2[1];
+      return this._transformParamsChangeAgainstParamsChange(dest, op1, op2, type, firstName, firstValue, secondName, secondValue);
+    };
+
+    FormattedText.prototype._getOpType = function(op) {
+      /*
+              Возвращает текстовое представление типа операции
+              @param op: OT operation
+              @return: string
+      */      if (op.ti != null) return "Ti";
+      if (op.td != null) return "Td";
+      if (op.paramsi != null) return "Paramsi";
+      if (op.paramsd != null) return "Paramsd";
+    };
+
+    FormattedText.prototype._getTransformFunction = function(op1, op2) {
+      var name;
+      name = "_transform" + (this._getOpType(op1)) + "Against" + (this._getOpType(op2));
+      return this[name];
+    };
+
+    FormattedText.prototype.name = "ftext";
+
+    FormattedText.prototype.create = function() {
+      /*
+              Создает новый документ
+              @return: []
+      */      return [];
+    };
+
+    FormattedText.prototype.apply = function(snapshot, ops) {
+      /*
+              Применяет массив операций
+              @param snapshot: any data
+              @param ops: [OT operation]
+              @return: any data, new snapshot
+      */
+      var op, _i, _len;
+      for (_i = 0, _len = ops.length; _i < _len; _i++) {
+        op = ops[_i];
+        snapshot = this.applyOp(snapshot, op);
+      }
+      return snapshot;
+    };
+
+    FormattedText.prototype.applyOp = function(snapshot, op) {
+      if (op.ti != null) return this._applyTextInsert(snapshot, op);
+      if (op.td != null) return this._applyTextDelete(snapshot, op);
+      if (op.paramsi != null) return this._applyParamsInsert(snapshot, op);
+      if (op.paramsd != null) return this._applyParamsDelete(snapshot, op);
+      throw new Error("Unknown operation applied: " + (JSON.stringify(op)));
+    };
+
+    FormattedText.prototype.transform = function(ops1, ops2, type) {
+      /*
+              Преобразует операции ops1 при условии, что были применены ops2.
+              Возвращает преобразованные ops1.
+              @param ops1: [object], array of OT operations
+              @param ops2: [object], array of OT operations
+              @param type: string, 'left' или 'right'
+              @return: [object], array of OT operations
+      */
+      var op1, op2, res, tmpDest, _i, _j, _len, _len2;
+      res = clone(ops1);
+      for (_i = 0, _len = ops2.length; _i < _len; _i++) {
+        op2 = ops2[_i];
+        tmpDest = [];
+        for (_j = 0, _len2 = res.length; _j < _len2; _j++) {
+          op1 = res[_j];
+          this.transformOp(tmpDest, op1, op2, type);
+        }
+        res = tmpDest;
+      }
+      return res;
+    };
+
+    FormattedText.prototype.transformOp = function(dest, op1, op2, type) {
+      /*
+              Преобразует op1 при условии, что была применена op2
+              @param dest: array
+              @param op1: OT operation
+              @param op2: OT operation
+              @param type: string, 'left' или 'right'
+              @return: dest
+      */
+      var func;
+      func = this._getTransformFunction(op1, op2);
+      return func(dest, op1, op2, type);
+    };
+
+    FormattedText.prototype.compose = function(ops1, ops2) {
+      /*
+              Объединяет несколько операций
+              @param ops1: [OT operation]
+              @param ops2: [OT operation]
+      */
+      var res, _ref;
+      res = [];
+      [].splice.apply(res, [0, 0].concat(ops1)), ops1;
+      [].splice.apply(res, [(_ref = res.length), res.length - _ref].concat(ops2)), ops2;
+      return res;
+    };
+
+    FormattedText.prototype.isFormattedTextOperation = function(op) {
+      /*
+              Возвращает true, если указанная операция является операцией над текстом
+              с форматированием
+              @param op: OT operation
+              @return: boolean
+      */      return (op.td != null) || (op.ti != null) || (op.paramsd != null) || (op.paramsi != null);
+    };
+
+    FormattedText.prototype._invertOp = function(op) {
+      /*
+              Инвертирует операцию
+              @param op: OT operation
+              @return: OT operation
+      */
+      var res;
+      res = {};
+      res.p = op.p;
+      if (op.params != null) res.params = clone(op.params);
+      if (op.td != null) res.ti = clone(op.td);
+      if (op.ti != null) res.td = clone(op.ti);
+      if (op.paramsd != null) res.paramsi = clone(op.paramsd);
+      if (op.paramsi != null) res.paramsd = clone(op.paramsi);
+      if (op.len != null) res.len = clone(op.len);
+      return res;
+    };
+
+    FormattedText.prototype.invert = function(ops) {
+      /*
+              Инвертирует операции
+              @param ops: [OT operation]
+              @return: [OT operation]
+      */
+      var op, res;
+      res = (function() {
+        var _i, _len, _results;
+        _results = [];
+        for (_i = 0, _len = ops.length; _i < _len; _i++) {
+          op = ops[_i];
+          _results.push(this._invertOp(op));
+        }
+        return _results;
+      }).call(this);
+      res.reverse();
+      return res;
+    };
+
+    return FormattedText;
+
+  })();
+
+  if (typeof WEB !== "undefined" && WEB !== null) {
+    exports.types || (exports.types = {});
+    exports.types.ftext = new FormattedText();
+  } else {
+    module.exports = new FormattedText();
+  }
 
   if (typeof WEB === "undefined" || WEB === null) types = require('../types');
 

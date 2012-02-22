@@ -1,0 +1,311 @@
+/**
+ * Классы стилей для волны, панели редактирования
+ */
+
+.inner-wave-container {
+    margin: 3px 3px 0 0;
+    padding: 7px 7px 1px 7px;
+    background: #F6F6F6;
+    -moz-border-radius: 3px;
+    border-radius: 3px;
+    position: relative;
+}
+
+#wave {
+    -moz-border-radius: 5px;
+    border-radius: 5px;
+}
+
+.wave-container {
+    margin: 0;
+    padding: 0;
+    color: black;
+    line-height: 17px;
+    min-width: 200px;
+}
+
+.wave-content {
+    overflow-y: auto;
+    padding-right: 2px;
+    min-height: 224px;
+    background: #FFF;
+    margin-bottom: 6px;
+}
+
+.wave-content>* {
+    display: none;
+}
+
+.wave-content.classic-view>.classic-view, .wave-content.mindmap-view>.mindmap-view {
+    display: block;
+}
+
+.wave-header {
+    height: 40px;
+    padding: 0 8px;
+    position: relative;
+    z-index: 7;
+    background: #6d7276;
+    -moz-border-radius: 4px 4px 0 0;
+    border-radius: 4px 4px 0 0;
+    border: 1px solid #B3B3B3;
+    border-bottom: 0;
+}
+
+.wave-header button {
+    border-color: #5B5F62;
+    margin-right: 0px;
+}
+
+.add-participant-block {
+    float: left;
+    margin-top: 6px;
+}
+
+.add-participant-block > input {
+    margin: 0;
+    border: none;
+    border-radius: 5px;
+    padding: 2px 10px 3px;
+    color: #C2C2C2;
+    width: 120px;
+}
+
+.wave-panel {
+    border: 1px solid #B3B3B3;
+    border-top: 0;
+    border-bottom: 0;
+    position: relative;
+}
+
+/**
+ * Стили кнопок редактирования содержимого
+ */
+
+.editing-disabled-panel {
+    line-height: 30px;
+    padding-left: 5px;
+}
+.editor-panel {
+    background: lightGrey;
+}
+.editor-panel button {
+    border: 1px solid #AFAFAF;
+    background-image: url('/rizzoma/img/wave_buttons.png');
+    margin: 3px 2px;
+    height: 22px;
+    width: 26px;
+    background-position: -6px -7px;
+}
+.editor-panel button[disabled="disabled"],
+.editor-panel button[disabled="disabled"]:hover {
+    background-position-y: -107px;
+}
+.editor-panel button:hover {
+    background-position-y: -40px;
+}
+.editor-panel button.pressed {
+    background-position-y: -74px;
+}
+.editor-panel .undo {
+    background-position: -6px -7px;
+}
+.editor-panel .redo {
+    background-position: -35px -7px;
+}
+.editor-panel .bold {
+    margin-left: 11px;
+    background-position: -70px -7px;
+}
+.editor-panel .italic {
+    background-position: -99px -7px;
+}
+.editor-panel .make-underlined {
+    background-position: -157px -7px;
+}
+.editor-panel .make-struckthrough {
+    background-position: -186px -7px;
+}
+.editor-panel .clear-formatting {
+    background-position: -215px -7px;
+}
+.editor-panel .bulleted {
+    background-position: -128px -7px;
+}
+.editor-panel .add-url {
+    background-position: -250px -7px;
+}
+.editor-panel .add-image {
+    background-position: -279px -7px;
+}
+.editor-panel .insert-blip {
+    margin-left: 11px;
+    background-position: -308px -7px;
+}
+.editor-panel .insert-mention {
+    background-position: -337px -7px;
+}
+
+.add-participant-block button {
+    border-width: 1px;
+    border-style: solid;
+    color: #2C2C2C;
+    padding: 3px 7px;
+    background-repeat: no-repeat;
+    background: #F3F3F3;
+    background: -moz-linear-gradient(top, rgba(243, 243, 243, 1) 0%, rgba(222, 222, 222, 1) 100%, rgba(222, 222, 222, 1) 100%, rgba(222, 222, 222, 1) 100%);
+    background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(243, 243, 243, 1)), color-stop(100%,rgba(222, 222, 222, 1)), color-stop(100%,rgba(222, 222, 222, 1)), color-stop(100%,rgba(222, 222, 222, 1)));
+    background: -webkit-linear-gradient(top, rgba(243, 243, 243, 1) 0%,rgba(222, 222, 222, 1) 100%,rgba(222, 222, 222, 1) 100%,rgba(222, 222, 222, 1) 100%);
+    background: -o-linear-gradient(top, rgba(243, 243, 243, 1) 0%,rgba(222, 222, 222, 1) 100%,rgba(222, 222, 222, 1) 100%,rgba(222, 222, 222, 1) 100%);
+    background: -ms-linear-gradient(top, rgba(243, 243, 243, 1) 0%,rgba(222, 222, 222, 1) 100%,rgba(222, 222, 222, 1) 100%,rgba(222, 222, 222, 1) 100%);
+    background: linear-gradient(top, rgba(243, 243, 243, 1) 0%,rgba(222, 222, 222, 1) 100%,rgba(222, 222, 222, 1) 100%,rgba(222, 222, 222, 1) 100%);
+    filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#f3f3f3', endColorstr='#dedede',GradientType=0 );
+    margin-right: 0;
+}
+
+.add-participant-block button:not([disabled="disabled"]):hover {
+    background: rgb(243,243,243);  Old browsers 
+    background: -moz-linear-gradient(top, rgba(243,243,243,1) 0%, rgba(204,204,204,1) 100%, rgba(222,222,222,1) 100%, rgba(222,222,222,1) 100%);  FF3.6+ 
+    background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(243,243,243,1)), color-stop(100%,rgba(204,204,204,1)), color-stop(100%,rgba(222,222,222,1)), color-stop(100%,rgba(222,222,222,1)));  Chrome,Safari4+ 
+    background: -webkit-linear-gradient(top, rgba(243,243,243,1) 0%,rgba(204,204,204,1) 100%,rgba(222,222,222,1) 100%,rgba(222,222,222,1) 100%);  Chrome10+,Safari5.1+ 
+    background: -o-linear-gradient(top, rgba(243,243,243,1) 0%,rgba(204,204,204,1) 100%,rgba(222,222,222,1) 100%,rgba(222,222,222,1) 100%);  Opera 11.10+ 
+    background: -ms-linear-gradient(top, rgba(243,243,243,1) 0%,rgba(204,204,204,1) 100%,rgba(222,222,222,1) 100%,rgba(222,222,222,1) 100%);  IE10+ 
+    background: linear-gradient(top, rgba(243,243,243,1) 0%,rgba(204,204,204,1) 100%,rgba(222,222,222,1) 100%,rgba(222,222,222,1) 100%);  W3C 
+    filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#f3f3f3', endColorstr='#dedede',GradientType=0 );  IE6-9 
+}
+
+.add-participant-block button[disabled="disabled"] {
+    color: #AEAEAE;
+}
+
+.link-to-wave {
+    float: right;
+    margin-top: 6px;
+    color: white;
+}
+
+.link-to-wave > input {
+    border: 1px solid #7C8084;
+    border-radius: 3px;
+    background: #B6B9BB;
+    color: #484849;
+    width: 140px;
+    padding: 3px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    margin-left: 3px;
+}
+
+/**
+ * Сообщения об ошибках
+ */
+
+.wave-error {
+    padding: 0;
+    background-color: red;
+    color: white;
+    opacity: 0.9;
+    position: absolute;
+    width: 100%;
+    z-index: 6;
+}
+
+.wave-error-text {
+    margin: 10px;
+}
+
+.wave-error .error-close-icon {
+    float: right;
+}
+
+/**
+ * Классы стилей для редактора ссылок (link-editor) и редактора вставки файлов (attachment-editor)
+ */
+.link-editor, .attachment-editor {
+    left: -1000px;
+    top: -1000px;
+    box-shadow: 0px 2px 10px -3px black;
+    border-radius: 5px;
+}
+
+.link-editor table,
+.attachment-editor table {
+    font-size: 13px;
+    font-weight: normal;
+    padding: 5px;
+}
+
+.attachment-editor {
+    display: none;
+}
+
+.attachment-editor.shown {
+    display: block;
+}
+
+.link-editor-name, .attachment-editor-name {
+    padding: 5px 5px 5px 10px;
+    background: #b0d6ff; /* Old browsers */
+    background: -moz-linear-gradient(top, #b0d6ff 0%, #5ba9fe 100%); /* FF3.6+ */
+    background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#b0d6ff), color-stop(100%,#5ba9fe)); /* Chrome,Safari4+ */
+    background: -webkit-linear-gradient(top, #b0d6ff 0%,#5ba9fe 100%); /* Chrome10+,Safari5.1+ */
+    background: -o-linear-gradient(top, #b0d6ff 0%,#5ba9fe 100%); /* Opera 11.10+ */
+    background: -ms-linear-gradient(top, #b0d6ff 0%,#5ba9fe 100%); /* IE10+ */
+    background: linear-gradient(top, #b0d6ff 0%,#5ba9fe 100%); /* W3C */
+    filter: progidXImageTransform.Microsoft.gradient( startColorstr='#b0d6ff', endColorstr='#5ba9fe',GradientType=0 ); /* IE6-9 */
+    color: white;
+    border-radius: 5px 5px 0 0;
+    border: 1px solid #81b9f6;
+    border-bottom: none;
+}
+
+.link-editor-name .close-icon, .attachment-editor-name .close-icon {
+    float: right;
+    background-image: url('/rizzoma/img/cross.png');
+    margin-top: 1px;
+}
+
+.link-editor .link-editor-content,
+.attachment-editor .attachment-editor-content {
+    border: 1px solid #bdbdbd;
+    border-top: none;
+    background: #F4F4F4;
+    border-radius: 0 0 5px 5px;
+    padding-top: 1px;
+}
+
+.link-name div {
+    max-height: 96px;
+    border: 1px solid #BDBDBD;
+    border-radius: 5px;
+    padding: 2px 9px 3px;
+    color: #2C2C2C;
+    background: white;
+    overflow: auto;
+}
+
+.link-editor input, .attachment-editor input {
+    outline: none;
+    border: 1px solid #bdbdbd;
+    width: 100%;
+    border-radius: 5px;
+    padding: 2px 10px 3px;
+    color: #2c2c2c;
+}
+
+.link-name div {
+    width: 210px;
+}
+
+.link-editor input, .attachment-editor input {
+    width: 230px;
+}
+
+.link-editor button, .attachment-editor button {
+    width: 81px;
+    margin-right: 34px;
+}
+
+.link-name input, .link-name div {
+    display: none;
+}
