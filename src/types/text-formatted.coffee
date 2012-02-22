@@ -506,7 +506,7 @@ class FormattedText
         name = "_transform#{@_getOpType(op1)}Against#{@_getOpType(op2)}"
         return @[name]
     
-    name: "text-formatted"
+    name: "ftext"
     
     create: ->
         ###

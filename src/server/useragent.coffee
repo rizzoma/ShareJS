@@ -1,4 +1,5 @@
-# This class exposes an authenticated interface to the model code.
+# A useragent is assigned to each client when the client connects. The useragent is responsible for making
+# sure all requests are authorized and maintaining document metadata.
 #
 # This is used by all the client frontends to interact with the server.
 
@@ -8,21 +9,23 @@ types = require '../types'
 # This module exports a function which you can call with the model and options. Calling the function
 # returns _another_ function which you can call when clients connect.
 module.exports = (model, options) ->
-  # By default, accept any client's connection + data submission.
+  # By default, accept all connections + data submissions.
   # Don't let anyone delete documents though.
-  auth = options.auth or (client, action) ->
+  auth = options.auth or (agent, action) ->
     if action.type in ['connect', 'read', 'create', 'update'] then action.accept() else action.reject()
 
-  # At some stage, I'll probably pull this out into a class. No rush though.
-  class Client
+  class UserAgent
     constructor: (data) ->
-      @id = hat()
+      @sessionId = hat()
       @connectTime = new Date
       @headers = data.headers
       @remoteAddress = data.remoteAddress
 
       # This is a map from docName -> listener function
       @listeners = {}
+
+      # Should be manually set by the auth function.
+      @name = null
 
       # We have access to these with socket.io, but I'm not sure we can support
       # these properties on the REST API or sockjs, etc.
@@ -44,6 +47,7 @@ module.exports = (model, options) ->
         when 'create' then 'create'
         when 'get snapshot', 'get ops', 'open' then 'read'
         when 'submit op' then 'update'
+        when 'submit meta' then 'update'
         when 'delete' then 'delete'
         else throw new Error "Invalid action name #{name}"
 
@@ -74,16 +78,29 @@ module.exports = (model, options) ->
       # We don't check that types[type.name] == type. That might be important at some point.
       type = types[type] if typeof type == 'string'
 
+      # I'm not sure what client-specified metadata should be allowed in the document metadata
+      # object. For now, I'm going to ignore all create metadata until I know how it should work.
+      meta = {}
+
+      meta.creator = @name if @name
+      meta.ctime = meta.mtime = Date.now()
+
       # The action object has a 'type' property already. Hence the doc type is renamed to 'docType'
       @doAuth {docName, docType:type, meta}, 'create', callback, =>
         model.create docName, type, meta, callback
 
     submitOp: (docName, opData, callback) ->
       opData.meta ||= {}
-      opData.meta.source = @id
+      opData.meta.source = @sessionId
+      dupIfSource = opData.dupIfSource or []
 
-      @doAuth {docName, op:opData.op, v:opData.v, meta:opData.meta}, 'submit op', callback, =>
-        model.applyOp docName, opData, callback
+      # If ops and meta get coalesced, they should be separated here.
+      if opData.op
+        @doAuth {docName, op:opData.op, v:opData.v, meta:opData.meta, dupIfSource}, 'submit op', callback, =>
+          model.applyOp docName, opData, callback
+      else
+        @doAuth {docName, meta:opData.meta}, 'submit meta', callback, =>
+          model.applyMetaOp docName, opData, callback
 
     # Delete the named operation.
     # Callback is passed (deleted?, error message)
@@ -95,7 +112,7 @@ module.exports = (model, options) ->
     listen: (docName, version, listener, callback) ->
       authOps = if version?
         # If the specified version is older than the current version, we have to also check that the
-        # client is allowed to get ops from the specified version.
+        # agent is allowed to get ops from the specified version.
         #
         # We _could_ check the version number of the document and then only check getOps if
         # the specified version is old, but an auth check is almost certainly faster than a db roundtrip.
@@ -119,11 +136,11 @@ module.exports = (model, options) ->
       model.removeListener docName, @listeners[docName]
       delete @listeners[docName]
 
-  # Finally, return a function which takes client data and returns an authenticated client object
+  # Finally, return a function which takes client data and returns an authenticated useragent object
   # through a callback.
   (data, callback) ->
-    client = new Client data
-    client.doAuth null, 'connect', callback, ->
-      # Maybe store a set of clients? Is that useful?
-      callback null, client
+    agent = new UserAgent data
+    agent.doAuth null, 'connect', callback, ->
+      # Maybe store a set of agents? Is that useful?
+      callback null, agent
 

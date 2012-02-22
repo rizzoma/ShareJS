@@ -23,6 +23,7 @@ fetch = (method, port, path, postData, extraHeaders, callback) ->
     data = ''
     response.on 'data', (chunk) -> data += chunk
     response.on 'end', ->
+      data = data.trim()
       if response.headers['content-type'] == 'application/json'
         data = JSON.parse(data)
 
@@ -39,14 +40,15 @@ module.exports = testCase
   setUp: (callback) ->
     @name = 'testingdoc'
 
-    @auth = (client, action) -> action.accept()
+    @auth = (agent, action) -> action.accept()
 
     # Create a new server which just exposes the REST interface with default options
     options = {
       socketio: null
+      browserChannel: null
       rest: {}
       db: {type: 'none'}
-      auth: (client, action) => @auth client, action
+      auth: (agent, action) => @auth agent, action
     }
 
     # For some reason, exceptions thrown in setUp() are ignored.
@@ -69,7 +71,23 @@ module.exports = testCase
     fetch 'GET', @port, "/doc/#{@name}", null, (res, data) ->
       test.strictEqual(res.statusCode, 404)
       test.done()
+      
+   'return 404 and empty body when on HEAD on a nonexistant document': (test) ->
+    fetch 'HEAD', @port, "/doc/#{@name}", null, (res, data) ->
+      test.strictEqual res.statusCode, 404
+      test.strictEqual data, ''
+      test.done()
   
+  'return 200, empty body, version and type when on HEAD on a document': (test) ->
+    @model.create @name, 'simple', =>
+      @model.applyOp @name, {v:0, op:{position: 0, text: 'Hi'}}, =>
+        fetch 'HEAD', @port, "/doc/#{@name}", null, (res, data, headers) ->
+          test.strictEqual res.statusCode, 200
+          test.strictEqual headers['x-ot-version'], '1'
+          test.strictEqual headers['x-ot-type'], 'simple'
+          test.strictEqual data, ''
+          test.done()
+          
   'GET a document returns the document snapshot': (test) ->
     @model.create @name, 'simple', =>
       @model.applyOp @name, {v:0, op:{position: 0, text: 'Hi'}}, =>
@@ -96,7 +114,12 @@ module.exports = testCase
       test.strictEqual res.statusCode, 200
 
       @model.getSnapshot @name, (error, doc) ->
-        test.deepEqual doc, {v:0, type:types.simple, snapshot:{str:''}, meta:{}}
+        meta = doc.meta
+        delete doc.meta
+        test.deepEqual doc, {v:0, type:types.simple, snapshot:{str:''}}
+        test.ok meta
+        test.strictEqual typeof(meta.ctime), 'number'
+        test.strictEqual typeof(meta.mtime), 'number'
         test.done()
 
   'POST a document in the DB returns 200 OK': (test) ->
@@ -129,6 +152,13 @@ module.exports = testCase
       test.strictEqual res.statusCode, 400
       test.done()
   
+  "Can't POST an op to a nonexistant document": (test) ->
+    # This was found in the wild -
+    # https://github.com/josephg/ShareJS/issues/66
+    fetch 'POST', @port, "/doc/#{@name}?v=0", {foo:'bar'}, (res, data) ->
+      test.strictEqual res.statusCode, 404
+      test.done()
+    
   'DELETE deletes a document': (test) ->
     @model.create @name, 'simple', =>
       fetch 'DELETE', @port, "/doc/#{@name}", null, (res, data) =>
@@ -144,17 +174,17 @@ module.exports = testCase
       test.done()
 
   'Cannot do anything if the server doesnt allow client connections': (test) ->
-    @auth = (client, action) ->
+    @auth = (agent, action) ->
       test.strictEqual action.type, 'connect'
-      test.ok client.remoteAddress in ['localhost', '127.0.0.1'] # Is there a nicer way to do this?
-      test.strictEqual typeof client.id, 'string'
-      test.ok client.id.length > 5
-      test.ok client.connectTime
+      test.ok agent.remoteAddress in ['localhost', '127.0.0.1'] # Is there a nicer way to do this?
+      test.strictEqual typeof agent.sessionId, 'string'
+      test.ok agent.sessionId.length > 5
+      test.ok agent.connectTime
 
-      test.strictEqual typeof client.headers, 'object'
+      test.strictEqual typeof agent.headers, 'object'
 
       # This is added above
-      test.strictEqual client.headers['x-testing'], 'booyah'
+      test.strictEqual agent.headers['x-testing'], 'booyah'
 
       action.reject()
 
@@ -244,4 +274,5 @@ module.exports = testCase
         @model.getSnapshot @name, (error, doc) ->
           test.ok doc
           test.done()
-  
+
+
