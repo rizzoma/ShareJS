@@ -7,6 +7,8 @@ task 'test', 'Run all tests', ->
 	console.log 'Running tests...'
 	exec 'nodeunit tests.coffee', (err, stdout, stderr) ->
 		throw err if err
+        exec 'cucumber.js ./test/types/gherkin_tests/formatted_text/', (err, stdout, stderr) ->
+            throw(err) if err
 
 task 'build', 'Build the .js files', (options) ->
 	exec "coffee --compile --bare --output lib/ src/", (err, stdout, stderr) ->
