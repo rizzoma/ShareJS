@@ -1,9 +1,10 @@
 (function() {
   var applyChange;
-
   applyChange = function(doc, oldval, newval) {
     var commonEnd, commonStart;
-    if (oldval === newval) return;
+    if (oldval === newval) {
+      return;
+    }
     commonStart = 0;
     while (oldval.charAt(commonStart) === newval.charAt(commonStart)) {
       commonStart++;
@@ -16,10 +17,9 @@
       doc.del(commonStart, oldval.length - commonStart - commonEnd);
     }
     if (newval.length !== commonStart + commonEnd) {
-      return doc.insert(commonStart, newval.slice(commonStart, (newval.length - commonEnd)));
+      return doc.insert(commonStart, newval.slice(commonStart, newval.length - commonEnd));
     }
   };
-
   window.sharejs.Doc.prototype.attach_textarea = function(elem) {
     var doc, event, genOp, prevvalue, replaceText, _i, _len, _ref, _results;
     doc = this;
@@ -30,7 +30,9 @@
       newSelection = [transformCursor(elem.selectionStart), transformCursor(elem.selectionEnd)];
       scrollTop = elem.scrollTop;
       elem.value = newText;
-      if (elem.scrollTop !== scrollTop) elem.scrollTop = scrollTop;
+      if (elem.scrollTop !== scrollTop) {
+        elem.scrollTop = scrollTop;
+      }
       return elem.selectionStart = newSelection[0], elem.selectionEnd = newSelection[1], newSelection;
     };
     this.on('insert', function(pos, text) {
@@ -71,13 +73,8 @@
     _results = [];
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
       event = _ref[_i];
-      if (elem.addEventListener) {
-        _results.push(elem.addEventListener(event, genOp, false));
-      } else {
-        _results.push(elem.attachEvent('on' + event, genOp));
-      }
+      _results.push(elem.addEventListener ? elem.addEventListener(event, genOp, false) : elem.attachEvent('on' + event, genOp));
     }
     return _results;
   };
-
 }).call(this);
