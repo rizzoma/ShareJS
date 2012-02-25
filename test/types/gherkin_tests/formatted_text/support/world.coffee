@@ -6,7 +6,7 @@ NetworkProxy = require('./network_proxy').NetworkProxy
 types = req('src/types')
 
 class World
-    DOC_TYPE: 'text-formatted'
+    DOC_TYPE: 'ftext'
     DOC_ID: 'test'
 
     constructor: ->
