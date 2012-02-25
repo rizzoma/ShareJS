@@ -23,7 +23,6 @@ class World
 
     applyServerOp: (op, callback) ->
         @server.applyOp @DOC_ID, op, (err, v) ->
-            console.error "Here is error" if err
             return callback(err) if err
             callback(null, v)
 
