@@ -4,6 +4,8 @@ Model = req('src/server/model')
 Doc = req('src/client/doc').Doc
 NetworkProxy = require('./network_proxy').NetworkProxy
 types = req('src/types')
+clone = (o) -> JSON.parse(JSON.stringify(o))
+
 
 class World
     DOC_TYPE: 'ftext'
@@ -31,7 +33,12 @@ class World
             return callback(err) if err
             @clients[clientNum] = client = {}
             client.proxy = new NetworkProxy(clientNum)
-            client.doc = new Doc(client.proxy, @DOC_ID, doc.v, types[@DOC_TYPE], doc.snapshot)
+            docData =
+                v: doc.v
+                snaphot: clone doc.snapshot
+                type: @DOC_TYPE
+            client.doc = new Doc(client.proxy, @DOC_ID, docData)
+            client.proxy.doc = client.doc
             @server.listen @DOC_ID, doc.v, client.proxy.receive, (err) ->
                 return callback(err) if err
                 callback(null)

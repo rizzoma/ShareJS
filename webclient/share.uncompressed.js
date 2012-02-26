@@ -1,7 +1,8 @@
 (function() {
-  var Connection, Doc, FormattedText, MicroEvent, append, bootstrapTransform, checkValidComponent, checkValidOp, clone, exports, invertComponent, io, nextTick, strInject, text, transformComponent, transformPosition, types,
+  var BCSocket, Connection, Doc, FormattedText, MicroEvent, append, bootstrapTransform, checkValidComponent, checkValidOp, clone, exports, invertComponent, nextTick, strInject, text, transformComponent, transformPosition, types,
     __slice = Array.prototype.slice,
-    __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
+    __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
+    __indexOf = Array.prototype.indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
 
   window.sharejs = exports = {
     'version': '0.5.0-pre'
@@ -372,48 +373,48 @@
 
   if (typeof WEB === 'undefined') text = require('./text');
 
-  text['api'] = {
-    'provides': {
-      'text': true
+  text.api = {
+    provides: {
+      text: true
     },
-    'getLength': function() {
+    getLength: function() {
       return this.snapshot.length;
     },
-    'getText': function() {
+    getText: function() {
       return this.snapshot;
     },
-    'insert': function(pos, text, callback) {
+    insert: function(pos, text, callback) {
       var op;
       op = [
         {
-          'p': pos,
-          'i': text
+          p: pos,
+          i: text
         }
       ];
       this.submitOp(op, callback);
       return op;
     },
-    'del': function(pos, length, callback) {
+    del: function(pos, length, callback) {
       var op;
       op = [
         {
-          'p': pos,
-          'd': this.snapshot.slice(pos, (pos + length))
+          p: pos,
+          d: this.snapshot.slice(pos, (pos + length))
         }
       ];
       this.submitOp(op, callback);
       return op;
     },
-    '_register': function() {
+    _register: function() {
       return this.on('remoteop', function(op) {
         var component, _i, _len, _results;
         _results = [];
         for (_i = 0, _len = op.length; _i < _len; _i++) {
           component = op[_i];
-          if (component['i'] !== void 0) {
-            _results.push(this.emit('insert', component['p'], component['i']));
+          if (component.i !== void 0) {
+            _results.push(this.emit('insert', component.p, component.i));
           } else {
-            _results.push(this.emit('delete', component['p'], component['d']));
+            _results.push(this.emit('delete', component.p, component.d));
           }
         }
         return _results;
@@ -1220,136 +1221,269 @@
     module.exports = new FormattedText();
   }
 
-  Doc = function(connection, name, version, type, snapshot) {
-    var inflightCallbacks, inflightOp, k, otApply, pendingCallbacks, pendingOp, serverOps, v, xf, _ref,
-      _this = this;
-    this.name = name;
-    this.version = version;
-    this.type = type;
-    this.snapshot = snapshot;
-    if (this.type.compose == null) {
-      throw new Error('Handling types without compose() defined is not currently implemented');
+  if (typeof WEB === "undefined" || WEB === null) types = require('../types');
+
+  Doc = (function() {
+
+    function Doc(connection, name, openData) {
+      this.connection = connection;
+      this.name = name;
+      this.shout = __bind(this.shout, this);
+      this.flush = __bind(this.flush, this);
+      openData || (openData = {});
+      this.version = openData.v;
+      this.snapshot = openData.snaphot;
+      if (openData.type) this._setType(openData.type);
+      this.state = 'closed';
+      this.autoOpen = false;
+      this._create = openData.create;
+      this.inflightOp = null;
+      this.inflightCallbacks = [];
+      this.inflightSubmittedIds = [];
+      this.pendingOp = null;
+      this.pendingCallbacks = [];
+      this.serverOps = {};
     }
-    inflightOp = null;
-    inflightCallbacks = [];
-    pendingOp = null;
-    pendingCallbacks = [];
-    serverOps = {};
-    xf = this.type.transformX || function(client, server) {
+
+    Doc.prototype._xf = function(client, server) {
       var client_, server_;
-      client_ = _this.type.transform(client, server, 'left');
-      server_ = _this.type.transform(server, client, 'right');
-      return [client_, server_];
+      if (this.type.transformX) {
+        return this.type.transformX(client, server);
+      } else {
+        client_ = this.type.transform(client, server, 'left');
+        server_ = this.type.transform(server, client, 'right');
+        return [client_, server_];
+      }
     };
-    otApply = function(docOp, isRemote) {
+
+    Doc.prototype._otApply = function(docOp, isRemote) {
       var oldSnapshot;
-      oldSnapshot = _this.snapshot;
-      _this.snapshot = _this.type.apply(_this.snapshot, docOp);
-      _this.emit('change', docOp, oldSnapshot);
-      if (isRemote) return _this.emit('remoteop', docOp, oldSnapshot);
+      oldSnapshot = this.snapshot;
+      this.snapshot = this.type.apply(this.snapshot, docOp);
+      this.emit('change', docOp, oldSnapshot);
+      if (isRemote) return this.emit('remoteop', docOp, oldSnapshot);
     };
-    this.flush = function() {
-      if (inflightOp === null && pendingOp !== null) {
-        inflightOp = pendingOp;
-        inflightCallbacks = pendingCallbacks;
-        pendingOp = null;
-        pendingCallbacks = [];
-        return connection.send({
-          'doc': _this.name,
-          'op': inflightOp,
-          'v': _this.version
-        }, function(error, response) {
-          var callback, oldInflightOp, undo, _i, _j, _len, _len2, _ref;
-          oldInflightOp = inflightOp;
-          inflightOp = null;
-          if (error) {
-            if (type.invert) {
-              undo = _this.type.invert(oldInflightOp);
-              if (pendingOp) {
-                _ref = xf(pendingOp, undo), pendingOp = _ref[0], undo = _ref[1];
-              }
-              otApply(undo, true);
-            } else {
-              throw new Error("Op apply failed (" + response.error + ") and the OT type does not define an invert function.");
-            }
-            for (_i = 0, _len = inflightCallbacks.length; _i < _len; _i++) {
-              callback = inflightCallbacks[_i];
-              callback(error);
-            }
-          } else {
-            if (response.v !== _this.version) {
-              throw new Error('Invalid version from server');
-            }
-            serverOps[_this.version] = oldInflightOp;
-            _this.version++;
-            for (_j = 0, _len2 = inflightCallbacks.length; _j < _len2; _j++) {
-              callback = inflightCallbacks[_j];
-              callback(null, oldInflightOp);
-            }
+
+    Doc.prototype._connectionStateChanged = function(state, data) {
+      switch (state) {
+        case 'disconnected':
+          this.state = 'closed';
+          if (this.inflightOp) this.inflightSubmittedIds.push(this.connection.id);
+          this.emit('closed');
+          break;
+        case 'ok':
+          if (this.autoOpen) this.open();
+          break;
+        case 'stopped':
+          if (typeof this._openCallback === "function") this._openCallback(data);
+      }
+      return this.emit(state, data);
+    };
+
+    Doc.prototype._setType = function(type) {
+      var k, v, _ref;
+      if (typeof type === 'string') type = types[type];
+      if (!(type && type.compose)) {
+        throw new Error('Support for types without compose() is not implemented');
+      }
+      this.type = type;
+      if (type.api) {
+        _ref = type.api;
+        for (k in _ref) {
+          v = _ref[k];
+          this[k] = v;
+        }
+        return typeof this._register === "function" ? this._register() : void 0;
+      } else {
+        return this.provides = {};
+      }
+    };
+
+    Doc.prototype._onMessage = function(msg) {
+      var callback, docOp, error, oldInflightOp, op, path, response, undo, value, _i, _j, _len, _len2, _ref, _ref2, _ref3, _ref4, _ref5, _ref6, _ref7;
+      if (msg.open === true) {
+        this.state = 'open';
+        this._create = false;
+        if (this.created == null) this.created = !!msg.create;
+        if (msg.type) this._setType(msg.type);
+        if (msg.create) {
+          this.created = true;
+          this.snapshot = this.type.create();
+        } else {
+          if (this.created !== true) this.created = false;
+          if (msg.snapshot !== void 0) this.snapshot = msg.snapshot;
+        }
+        if (msg.v != null) this.version = msg.v;
+        if (this.inflightOp) {
+          response = {
+            doc: this.name,
+            op: this.inflightOp,
+            v: this.version
+          };
+          if (this.inflightSubmittedIds.length) {
+            response.dupIfSource = this.inflightSubmittedIds;
           }
-          return _this.flush();
-        });
+          this.connection.send(response);
+        } else {
+          this.flush();
+        }
+        this.emit('open');
+        return typeof this._openCallback === "function" ? this._openCallback(null) : void 0;
+      } else if (msg.open === false) {
+        if (msg.error) {
+          if (typeof console !== "undefined" && console !== null) {
+            console.error("Could not open document: " + msg.error);
+          }
+          this.emit('error', msg.error);
+          if (typeof this._openCallback === "function") {
+            this._openCallback(msg.error);
+          }
+        }
+        this.state = 'closed';
+        this.emit('closed');
+        if (typeof this._closeCallback === "function") this._closeCallback();
+        return this._closeCallback = null;
+      } else if (msg.op === null && error === 'Op already submitted') {} else if ((msg.op === void 0 && msg.v !== void 0) || (msg.op && (_ref = msg.meta.source, __indexOf.call(this.inflightSubmittedIds, _ref) >= 0))) {
+        oldInflightOp = this.inflightOp;
+        this.inflightOp = null;
+        this.inflightSubmittedIds.length = 0;
+        error = msg.error;
+        if (error) {
+          if (this.type.invert) {
+            undo = this.type.invert(oldInflightOp);
+            if (this.pendingOp) {
+              _ref2 = this._xf(this.pendingOp, undo), this.pendingOp = _ref2[0], undo = _ref2[1];
+            }
+            this._otApply(undo, true);
+          } else {
+            this.emit('error', "Op apply failed (" + error + ") and the op could not be reverted");
+          }
+          _ref3 = this.inflightCallbacks;
+          for (_i = 0, _len = _ref3.length; _i < _len; _i++) {
+            callback = _ref3[_i];
+            callback(error);
+          }
+        } else {
+          if (msg.v !== this.version) {
+            throw new Error('Invalid version from server');
+          }
+          this.serverOps[this.version] = oldInflightOp;
+          this.version++;
+          _ref4 = this.inflightCallbacks;
+          for (_j = 0, _len2 = _ref4.length; _j < _len2; _j++) {
+            callback = _ref4[_j];
+            callback(null, oldInflightOp);
+          }
+        }
+        return this.flush();
+      } else if (msg.op) {
+        if (msg.v < this.version) return;
+        if (msg.doc !== this.name) {
+          return this.emit('error', "Expected docName '" + this.name + "' but got " + msg.doc);
+        }
+        if (msg.v !== this.version) {
+          return this.emit('error', "Expected version " + this.version + " but got " + msg.v);
+        }
+        op = msg.op;
+        this.serverOps[this.version] = op;
+        docOp = op;
+        if (this.inflightOp !== null) {
+          _ref5 = this._xf(this.inflightOp, docOp), this.inflightOp = _ref5[0], docOp = _ref5[1];
+        }
+        if (this.pendingOp !== null) {
+          _ref6 = this._xf(this.pendingOp, docOp), this.pendingOp = _ref6[0], docOp = _ref6[1];
+        }
+        this.version++;
+        return this._otApply(docOp, true);
+      } else if (msg.meta) {
+        _ref7 = msg.meta, path = _ref7.path, value = _ref7.value;
+        switch (path != null ? path[0] : void 0) {
+          case 'shout':
+            return this.emit('shout', value);
+          default:
+            return typeof console !== "undefined" && console !== null ? console.warn('Unhandled meta op:', msg) : void 0;
+        }
+      } else {
+        return typeof console !== "undefined" && console !== null ? console.warn('Unhandled document message:', msg) : void 0;
       }
     };
-    this._onOpReceived = function(msg) {
-      var docOp, op, _ref, _ref2;
-      if (msg.v < this.version) return;
-      if (msg.doc !== this.name) {
-        throw new Error("Expected docName '" + this.name + "' but got " + msg.doc);
+
+    Doc.prototype.flush = function() {
+      if (!(this.connection.state === 'ok' && this.inflightOp === null && this.pendingOp !== null)) {
+        return;
       }
-      if (msg.v !== this.version) {
-        throw new Error("Expected version " + this.version + " but got " + msg.v);
-      }
-      op = msg.op;
-      serverOps[this.version] = op;
-      docOp = op;
-      if (inflightOp !== null) {
-        _ref = xf(inflightOp, docOp), inflightOp = _ref[0], docOp = _ref[1];
-      }
-      if (pendingOp !== null) {
-        _ref2 = xf(pendingOp, docOp), pendingOp = _ref2[0], docOp = _ref2[1];
-      }
-      this.version++;
-      return otApply(docOp, true);
+      this.inflightOp = this.pendingOp;
+      this.inflightCallbacks = this.pendingCallbacks;
+      this.pendingOp = null;
+      this.pendingCallbacks = [];
+      return this.connection.send({
+        doc: this.name,
+        op: this.inflightOp,
+        v: this.version
+      });
     };
-    this.submitOp = function(op, callback) {
+
+    Doc.prototype.submitOp = function(op, callback) {
       if (this.type.normalize != null) op = this.type.normalize(op);
       this.snapshot = this.type.apply(this.snapshot, op);
-      if (pendingOp !== null) {
-        pendingOp = this.type.compose(pendingOp, op);
+      if (this.pendingOp !== null) {
+        this.pendingOp = this.type.compose(this.pendingOp, op);
       } else {
-        pendingOp = op;
+        this.pendingOp = op;
       }
-      if (callback) pendingCallbacks.push(callback);
+      if (callback) this.pendingCallbacks.push(callback);
       this.emit('change', op);
       return setTimeout(this.flush, 0);
     };
-    this.close = function(callback) {
-      var _this = this;
-      if (connection.socket === null) {
+
+    Doc.prototype.shout = function(msg) {
+      return this.connection.send({
+        doc: this.name,
+        meta: {
+          path: ['shout'],
+          value: msg
+        }
+      });
+    };
+
+    Doc.prototype.open = function(callback) {
+      var message,
+        _this = this;
+      this.autoOpen = true;
+      if (this.state !== 'closed') return;
+      message = {
+        doc: this.name,
+        open: true
+      };
+      if (this.snapshot === void 0) message.snapshot = null;
+      if (this.type) message.type = this.type.name;
+      if (this.version != null) message.v = this.version;
+      if (this._create) message.create = true;
+      this.connection.send(message);
+      this.state = 'opening';
+      return this._openCallback = function(error) {
+        _this._openCallback = null;
+        return typeof callback === "function" ? callback(error) : void 0;
+      };
+    };
+
+    Doc.prototype.close = function(callback) {
+      this.autoOpen = false;
+      if (this.state === 'closed') {
         return typeof callback === "function" ? callback() : void 0;
       }
-      connection.send({
-        'doc': this.name,
+      this.connection.send({
+        doc: this.name,
         open: false
-      }, function() {
-        if (typeof callback === "function") callback();
-        _this.emit('closed');
       });
-      return this.emit('closing');
+      this.state = 'closed';
+      this.emit('closing');
+      return this._closeCallback = callback;
     };
-    if (this.type.api) {
-      _ref = this.type.api;
-      for (k in _ref) {
-        v = _ref[k];
-        this[k] = v;
-      }
-      if (typeof this._register === "function") this._register();
-    } else {
-      this.provides = {};
-    }
-    return this;
-  };
+
+    return Doc;
+
+  })();
 
   if (typeof WEB === "undefined" || WEB === null) {
     MicroEvent = require('./microevent');
@@ -1361,157 +1495,119 @@
 
   if (typeof WEB !== "undefined" && WEB !== null) {
     types || (types = exports.types);
-    if (!window.io) throw new Error('Must load socket.io before this library');
-    io = window.io;
+    if (!window.BCSocket) {
+      throw new Error('Must load browserchannel before this library');
+    }
+    BCSocket = window.BCSocket;
   } else {
     types = require('../types');
-    io = require('socket.io-client');
+    BCSocket = require('browserchannel').BCSocket;
     Doc = require('./doc').Doc;
   }
 
   Connection = (function() {
 
-    function Connection(origin) {
-      this.onMessage = __bind(this.onMessage, this);
-      this.connected = __bind(this.connected, this);
-      this.disconnected = __bind(this.disconnected, this);
+    function Connection(host) {
       var _this = this;
       this.docs = {};
-      this.handlers = {};
       this.state = 'connecting';
-      this.socket = io.connect(origin, {
-        'force new connection': true
+      this.socket = new BCSocket(host, {
+        reconnect: true
       });
-      this.socket.on('connect', this.connected);
-      this.socket.on('disconnect', this.disconnected);
-      this.socket.on('message', this.onMessage);
-      this.socket.on('connect_failed', function(error) {
-        var callback, callbacks, docName, h, t, _ref, _results;
-        if (error === 'unauthorized') error = 'forbidden';
-        _this.socket = null;
-        _this.emit('connect failed', error);
-        _ref = _this.handlers;
-        _results = [];
-        for (docName in _ref) {
-          h = _ref[docName];
-          _results.push((function() {
-            var _results2;
-            _results2 = [];
-            for (t in h) {
-              callbacks = h[t];
-              _results2.push((function() {
-                var _i, _len, _results3;
-                _results3 = [];
-                for (_i = 0, _len = callbacks.length; _i < _len; _i++) {
-                  callback = callbacks[_i];
-                  _results3.push(callback(error));
-                }
-                return _results3;
-              })());
-            }
-            return _results2;
-          })());
+      this.socket.onmessage = function(msg) {
+        var docName;
+        if (msg.auth === null) {
+          _this.lastError = msg.error;
+          _this.disconnect();
+          return _this.emit('connect failed', msg.error);
+        } else if (msg.auth) {
+          _this.id = msg.auth;
+          _this.setState('ok');
+          return;
         }
-        return _results;
-      });
+        docName = msg.doc;
+        if (docName !== void 0) {
+          _this.lastReceivedDoc = docName;
+        } else {
+          msg.doc = docName = _this.lastReceivedDoc;
+        }
+        if (_this.docs[docName]) {
+          return _this.docs[docName]._onMessage(msg);
+        } else {
+          return typeof console !== "undefined" && console !== null ? console.error('Unhandled message', msg) : void 0;
+        }
+      };
+      this.connected = false;
+      this.socket.onclose = function(reason) {
+        _this.setState('disconnected', reason);
+        if (reason === 'Closed' || reason === 'Stopped by server') {
+          return _this.setState('stopped', _this.lastError || reason);
+        }
+      };
+      this.socket.onerror = function(e) {
+        return _this.emit('error', e);
+      };
+      this.socket.onopen = function() {
+        _this.lastError = _this.lastReceivedDoc = _this.lastSentDoc = null;
+        return _this.setState('handshaking');
+      };
+      this.socket.onconnecting = function() {
+        return _this.setState('connecting');
+      };
     }
 
-    Connection.prototype.disconnected = function() {
-      this.emit('disconnect');
-      return this.socket = null;
-    };
-
-    Connection.prototype.connected = function() {
-      return this.emit('connect');
-    };
-
-    Connection.prototype.send = function(msg, callback) {
-      var callbacks, docHandlers, docName, type, _base;
-      if (this.socket === null) {
-        throw new Error("Cannot send message " + (JSON.stringify(msg)) + " to a closed connection");
+    Connection.prototype.setState = function(state, data) {
+      var doc, docName, _ref, _results;
+      if (this.state === state) return;
+      this.state = state;
+      if (state === 'disconnected') delete this.id;
+      this.emit(state, data);
+      _ref = this.docs;
+      _results = [];
+      for (docName in _ref) {
+        doc = _ref[docName];
+        _results.push(doc._connectionStateChanged(state, data));
       }
-      docName = msg.doc;
+      return _results;
+    };
+
+    Connection.prototype.send = function(data) {
+      var docName;
+      docName = data.doc;
       if (docName === this.lastSentDoc) {
-        delete msg.doc;
+        delete data.doc;
       } else {
         this.lastSentDoc = docName;
       }
-      this.socket.json.send(msg);
-      if (callback) {
-        type = msg.open === true ? 'open' : msg.open === false ? 'close' : msg.create ? 'create' : msg.snapshot === null ? 'snapshot' : msg.op ? 'op response' : void 0;
-        docHandlers = ((_base = this.handlers)[docName] || (_base[docName] = {}));
-        callbacks = (docHandlers[type] || (docHandlers[type] = []));
-        return callbacks.push(callback);
-      }
+      return this.socket.send(data);
     };
 
-    Connection.prototype.onMessage = function(msg) {
-      var c, callbacks, doc, docName, type, _i, _len, _ref;
-      docName = msg.doc;
-      if (docName !== void 0) {
-        this.lastReceivedDoc = docName;
-      } else {
-        msg.doc = docName = this.lastReceivedDoc;
-      }
-      this.emit('message', msg);
-      type = msg.open === true || (msg.open === false && msg.error) ? 'open' : msg.open === false ? 'close' : msg.snapshot !== void 0 ? 'snapshot' : msg.create ? 'create' : msg.op ? 'op' : msg.v !== void 0 ? 'op response' : void 0;
-      callbacks = (_ref = this.handlers[docName]) != null ? _ref[type] : void 0;
-      if (callbacks) {
-        delete this.handlers[docName][type];
-        for (_i = 0, _len = callbacks.length; _i < _len; _i++) {
-          c = callbacks[_i];
-          c(msg.error, msg);
-        }
-      }
-      if (type === 'op') {
-        doc = this.docs[docName];
-        if (doc) return doc._onOpReceived(msg);
-      }
+    Connection.prototype.disconnect = function() {
+      return this.socket.close();
     };
 
-    Connection.prototype.makeDoc = function(params) {
-      var doc, name, type,
+    Connection.prototype.makeDoc = function(name, data, callback) {
+      var doc,
         _this = this;
-      name = params.doc;
       if (this.docs[name]) throw new Error("Doc " + name + " already open");
-      type = params.type;
-      if (typeof type === 'string') type = types[type];
-      doc = new Doc(this, name, params.v, type, params.snapshot);
-      doc.created = !!params.create;
+      doc = new Doc(this, name, data);
       this.docs[name] = doc;
-      doc.on('closing', function() {
-        return delete _this.docs[name];
+      return doc.open(function(error) {
+        if (error) delete _this.docs[name];
+        return callback(error, (!error ? doc : void 0));
       });
-      return doc;
     };
 
     Connection.prototype.openExisting = function(docName, callback) {
-      var _this = this;
-      if (this.socket === null) {
-        callback('connection closed');
-        return;
-      }
-      if (this.docs[docName] != null) return this.docs[docName];
-      return this.send({
-        'doc': docName,
-        'open': true,
-        'snapshot': null
-      }, function(error, response) {
-        if (error) {
-          return callback(error);
-        } else {
-          return callback(null, _this.makeDoc(response));
-        }
-      });
+      var doc;
+      if (this.state === 'stopped') return callback('connection closed');
+      if (this.docs[docName]) return callback(null, this.docs[docName]);
+      return doc = this.makeDoc(docName, {}, callback);
     };
 
     Connection.prototype.open = function(docName, type, callback) {
-      var doc,
-        _this = this;
-      if (this.socket === null) {
-        callback('connection closed');
-        return;
-      }
+      var doc;
+      if (this.state === 'stopped') return callback('connection closed');
       if (typeof type === 'function') {
         callback = type;
         type = 'text';
@@ -1519,7 +1615,10 @@
       callback || (callback = function() {});
       if (typeof type === 'string') type = types[type];
       if (!type) throw new Error("OT code for document type missing");
-      if ((docName != null) && (this.docs[docName] != null)) {
+      if (docName == null) {
+        throw new Error('Server-generated random doc names are not currently supported');
+      }
+      if (this.docs[docName]) {
         doc = this.docs[docName];
         if (doc.type === type) {
           callback(null, doc);
@@ -1528,33 +1627,10 @@
         }
         return;
       }
-      return this.send({
-        'doc': docName,
-        'open': true,
-        'create': true,
-        'snapshot': null,
-        'type': type.name
-      }, function(error, response) {
-        if (error) {
-          return callback(error);
-        } else {
-          if (response.snapshot === void 0) response.snapshot = type.create();
-          response.type = type;
-          return callback(null, _this.makeDoc(response));
-        }
-      });
-    };
-
-    Connection.prototype.create = function(type, callback) {
-      return open(null, type, callback);
-    };
-
-    Connection.prototype.disconnect = function() {
-      if (this.socket) {
-        this.emit('disconnecting');
-        this.socket.disconnect();
-        return this.socket = null;
-      }
+      return this.makeDoc(docName, {
+        create: true,
+        type: type.name
+      }, callback);
     };
 
     return Connection;
@@ -1574,19 +1650,18 @@
   }
 
   exports.open = (function() {
-    var connections, getConnection;
+    var connections, getConnection, maybeClose;
     connections = {};
     getConnection = function(origin) {
       var c, del, location;
       if (typeof WEB !== "undefined" && WEB !== null) {
         location = window.location;
         if (origin == null) {
-          origin = "" + location.protocol + "//" + location.hostname + "/sjs";
+          origin = "" + location.protocol + "//" + location.host + "/channel";
         }
       }
       if (!connections[origin]) {
         c = new Connection(origin);
-        c.numDocs = 0;
         del = function() {
           return delete connections[origin];
         };
@@ -1595,6 +1670,16 @@
         connections[origin] = c;
       }
       return connections[origin];
+    };
+    maybeClose = function(c) {
+      var doc, name, numDocs, _ref;
+      numDocs = 0;
+      _ref = c.docs;
+      for (name in _ref) {
+        doc = _ref[name];
+        if (doc.state !== 'closed' || doc.autoOpen) numDocs++;
+      }
+      if (numDocs === 0) return c.disconnect();
     };
     return function(docName, type, origin, callback) {
       var c;
@@ -1606,18 +1691,17 @@
       c.numDocs++;
       c.open(docName, type, function(error, doc) {
         if (error) {
-          c.numDocs--;
-          if (c.numDocs === 0) c.disconnect();
-          return callback(error);
+          callback(error);
+          return maybeClose(c);
         } else {
           doc.on('closed', function() {
-            c.numDocs--;
-            if (c.numDocs === 0) return c.disconnect();
+            return maybeClose(c);
           });
           return callback(null, doc);
         }
       });
-      return c.on('connect failed');
+      c.on('connect failed');
+      return c;
     };
   })();
 

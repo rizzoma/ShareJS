@@ -57,12 +57,12 @@ FTextStepsDefinition = ->
         clientNum--
         obj = parse obj
         client = @clients[clientNum]
-        client.proxy.getReceivedOp (op) ->
+        client.proxy.getReceivedOp (op) =>
             try
                 assert.deepEqual op.op, obj
             catch e
                 return callback.fail(e)
-            client.doc._onOpReceived op
+            client.doc._onMessage op
             callback()
 
     @Then /^everyone should have (.+)$/, (obj, callback) ->

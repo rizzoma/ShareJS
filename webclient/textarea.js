@@ -42,7 +42,8 @@
           return cursor;
         }
       };
-      return replaceText(elem.value.slice(0, pos) + text + elem.value.slice(pos), transformCursor);
+      prevvalue = elem.value.replace(/\r\n/g, '\n');
+      return replaceText(prevvalue.slice(0, pos) + text + prevvalue.slice(pos), transformCursor);
     });
     this.on('delete', function(pos, text) {
       var transformCursor;
@@ -53,7 +54,8 @@
           return cursor;
         }
       };
-      return replaceText(elem.value.slice(0, pos) + elem.value.slice(pos + text.length), transformCursor);
+      prevvalue = elem.value.replace(/\r\n/g, '\n');
+      return replaceText(prevvalue.slice(0, pos) + prevvalue.slice(pos + text.length), transformCursor);
     });
     genOp = function(event) {
       var onNextTick;

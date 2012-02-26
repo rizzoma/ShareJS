@@ -4,17 +4,16 @@ class NetworkProxy
     ###
     Класс, подменяющий сеть для sharejs
     ###
+    state: "ok"
     constructor: (@id) ->
         @sentOps = []
         @sendCallbacks = []
         @receivedOps = []
         @receiveCallbacks = []
-        @responseCallbacks = []
 
-    send: (op, responseCallback) =>
+    send: (op) =>
         op = clone op
         op.meta = sid: @id
-        @responseCallbacks.push responseCallback
         @sentOps.push op
         num = @sentOps.length
         return if not @sendCallbacks[num]
@@ -49,9 +48,8 @@ class NetworkProxy
     _onReceive: (callback) ->
         @receiveCallbacks.push(callback)
     
-    receiveResponse: (op) ->
-        op = clone op
-        callback = @responseCallbacks.shift()
-        callback(null, op)
+    receiveResponse: (msg) ->
+        msg = clone msg
+        @doc._onMessage(msg)
 
 module.exports.NetworkProxy = NetworkProxy
