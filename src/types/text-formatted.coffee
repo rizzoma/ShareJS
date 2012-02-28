@@ -385,7 +385,7 @@ class FormattedText
     _transformParamsChangeAgainstTd: (dest, op1, op2) =>
         if op1.p >= op2.p + op2.td.length
             newOp = clone op1
-            op1.p -= op2.td.length
+            newOp.p -= op2.td.length
             dest.push newOp
         else if op1.p + op1.len <= op2.p
             dest.push clone op1
