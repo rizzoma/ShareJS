@@ -140,7 +140,6 @@ class FormattedText
             i--
     
     _applyTextInsert: (snapshot, op) =>
-        snapshot = clone snapshot
         [blockIndex, offset] = @_getBlockAndOffset(snapshot, op.p)
         if snapshot.length is blockIndex
             snapshot.push {t: op.ti, params: op.params}
@@ -162,7 +161,6 @@ class FormattedText
         return snapshot
     
     _applyTextDelete: (snapshot, op) =>
-        snapshot = clone snapshot
         [blockIndex, offset] = @_getBlockAndOffset(snapshot, op.p)
         block = snapshot[blockIndex]
         if not @_paramsAreEqual(block.params, op.params)
@@ -222,7 +220,6 @@ class FormattedText
         @param len: int, длина диапазона изменения параметров
         @param transformBlock: function, функция, изменяющая параметры
         ###
-        snapshot = clone snapshot
         [startBlockIndex, startOffset] = @_getBlockAndOffset(snapshot, p)
         [endBlockIndex, endOffset] = @_getBlockAndOffset(snapshot, p + len)
         if endOffset is 0
@@ -533,23 +530,7 @@ class FormattedText
         return @_applyParamsDelete(snapshot, op) if op.paramsd?
         throw new Error "Unknown operation applied: #{JSON.stringify op}"
         
-    transform: (ops1, ops2, type) ->
-        ###
-        Преобразует операции ops1 при условии, что были применены ops2.
-        Возвращает преобразованные ops1.
-        @param ops1: [object], array of OT operations
-        @param ops2: [object], array of OT operations
-        @param type: string, 'left' или 'right'
-        @return: [object], array of OT operations
-        ###
-        res = clone ops1
-        for op2 in ops2
-            tmpDest = []
-            @transformOp(tmpDest, op1, op2, type) for op1 in res
-            res = tmpDest
-        return res
-
-    transformOp: (dest, op1, op2, type) ->
+    transformOp: (dest, op1, op2, type) =>
         ###
         Преобразует op1 при условии, что была применена op2
         @param dest: array
@@ -607,8 +588,12 @@ class FormattedText
         res.reverse()
         return res
 
+formattedText = new FormattedText()
+check = ->
 if WEB?
     exports.types ||= {}
-    exports.types.ftext = new FormattedText()
+    exports._bt(formattedText, formattedText.transformOp, check, (dest, c) -> dest.push c)
+    exports.types.ftext = formattedText
 else
-    module.exports = new FormattedText()
+    require('./helpers').bootstrapTransform(formattedText, formattedText.transformOp, check, (dest, c) -> dest.push c)
+    module.exports = formattedText
