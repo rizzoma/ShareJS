@@ -914,7 +914,7 @@
       var newOp;
       if (op1.p >= op2.p + op2.td.length) {
         newOp = clone(op1);
-        op1.p -= op2.td.length;
+        newOp.p -= op2.td.length;
         dest.push(newOp);
       } else if (op1.p + op1.len <= op2.p) {
         dest.push(clone(op1));
@@ -1098,6 +1098,7 @@
               @return: any data, new snapshot
       */
       var op, _i, _len;
+      snapshot = clone(snapshot);
       for (_i = 0, _len = ops.length; _i < _len; _i++) {
         op = ops[_i];
         snapshot = this.applyOp(snapshot, op);
