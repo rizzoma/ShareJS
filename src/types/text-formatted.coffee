@@ -522,6 +522,7 @@ class FormattedText
         @param ops: [OT operation]
         @return: any data, new snapshot
         ###
+        snapshot = clone snapshot
         snapshot = @applyOp(snapshot, op) for op in ops
         snapshot
         
