@@ -1,5 +1,5 @@
 (function() {
-  var BCSocket, Connection, Doc, FormattedText, MicroEvent, append, bootstrapTransform, checkValidComponent, checkValidOp, clone, exports, invertComponent, nextTick, strInject, text, transformComponent, transformPosition, types,
+  var BCSocket, Connection, Doc, FormattedText, MicroEvent, append, bootstrapTransform, check, checkValidComponent, checkValidOp, clone, exports, formattedText, invertComponent, nextTick, strInject, text, transformComponent, transformPosition, types,
     __slice = Array.prototype.slice,
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
     __indexOf = Array.prototype.indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
@@ -152,7 +152,7 @@
 
   text.name = 'text';
 
-  text.create = text.create = function() {
+  text.create = function() {
     return '';
   };
 
@@ -423,74 +423,97 @@
   };
 
   /*
-  Текстовые операции с форматированием.
-  Документ представляется в виде:
+  Operations on rich text.
+  
+  Document is of the next form:
   [
       {
-          t: "Фрагмент жирный"
+          t: "Bold fragment"
           params:
               bold: true
               font-size: 14
       }
       {
-          t: "Фрагмент наклонный"
+          t: "Italic fragment"
           params: {italic: true}
       }
   ]
   
-  Параметры представляется парами ключ-значение и могут только заменяться.
+  T is a text field, common text operation are applied on this field.
+  Params is a set of key-value pairs, only "insert" and "delete" operations are applied for them.
+  All positions are measured from the start of document, not a start of fragment.
   
-  Доступные операции:
-      * вставка текста
-          p: 9                    # Позиция, в которую будет вставляться текст
-          t: "жирный"             # Вставляемый текст
-          params:                 # Параметры вставляемого текста
+  Available operations:
+      * text insertion
+          p: 9                    # Text will be inserted before this position
+          ti: "bold"              # Text to insert
+          params:                 # Params of the inserted text
               bold: true
-              font-size: 14    
-      * удаление текста
-          p: 8                    # Позиция, с которой начинается удаляемый текст
-          t: "Фрагмент"           # Удаляемый текст (нужен для инвертирования операции)
-          params: {italic: true}  # Параметры удаляемого текста (нужны для инвертирования операции
-      * вставка форматирования
-          p: 5                    # Позиция, с которой начинается изменение форматирования
-          fc: 4                   # Количество символов, для которых изменяется форматирование
-          paramsi:                # Добавляемый параметр (не более одного за операцию)
+              font-size: 14
+      * text deletion
+          p: 8                    # Text will be deleted starting with this position
+          td: "Fragment"          # Text to delete (needed both to revert and check operation)
+          params: {italic: true}  # Params of deleted text (needed both to revert and check operation)
+      * param insertion
+          p: 5                    # Param will be inserted for text starting with that position
+          len: 4                  # Number of symbols that will insert param
+          paramsi:                # Added param (one param per operation)
               font: 14
-      * удаление форматирования
-          p: 5                    # Позиция, с которой начинается изменение форматирования
-          fc: 4                   # Количество символов, для которых изменяется форматирование
-          paramsd:                # Удаляемые параметры (не более одного за операцию)
+      * param deletion
+          p: 5                    # Param will be deleted starting with this position
+          len: 4                  # Number of symbols that will delete param
+          paramsd:                # Removed param (one param per operation)
               bold: true
   
-  Трансформации вставки текста и удаления текста между собой очевидны, их
-  поведение скопировано со строковых операций из ShareJS.
-  Операция вставки текста при трансформации против совершенной операции изменения
-  параметров не меняется, то есть она не получает новых параметров.
-  Следовательно, операция изменения параметров при трансформации против
-  совершенной операции вставки не меняется либо разбивается на две операции.
-  Операция удаления текста при трансформации против совершенной операции
-  изменения параметров изменяет свои параметры, чтобы иметь возможность быть
-  примененной.
-  Операция изменения параметров при трансформации против совершенной операции
-  удаления изменяет свои позицию и длину.
-  Наконец, взаимная трансформации двух операций изменения параметров не меняет
-  ничего, если они оперируют разными параметрами. Если они выполняют одно и
-  то же изменение, то одна из операций будет уменьшена либо убрана совсем. Если
-  обе операции изменяют один и тот же параметр, но в разные значения, то одна из
-  операций будет уменьшена (на серверной стороне решение принимается в пользу
-  приходящей операции, на клиентской - в пользу уже совершенной).
+  Params insertion and params deletion are both params change operations.
+  Transformations of text inseration and text deletion are obvious, their behavior
+  is copied from text ShareJS type.
+  Text insertion is not changed when transformed against params change - it does
+  not insert or remove any params. Thus, simultaneous text insertion and params
+  insertion can lead to a following situation:
+  client1 and client2 have doc [{t: "discssion", params: {}}]
+  client1 inserts u: {p: 4, t: "u"}
+  client2 inserts bold param: {p: 0, len: 9, paramsi: {bold: true}}
+  After transformations & application of operations they will both have:
+  [
+      {
+          t: "disc"
+          params: {bold: true}
+      }
+      {
+          t: "u"
+          params: {}
+      }
+      {
+          t: "ssion"
+          params: {bold: true}
+      }
+  ]
+  Simple idea to transfrom text insertion against params change does not work in all
+  possible cases.
+  Params change when transformed against text insertion gets split into two operations
+  if needed.
+  Text deletion might be split in up to three operations when tranformed against params
+  change. Text and positions stay unchanged, only params field gets changed.
+  Params change when transformed against text deletion might change its pos and length.
+  Params change isn't transformed against another params change if they operate on
+  different params. If two operations do same action (set equal value or remove param)
+  then one of them might be cut down, but the overall effect will remain unchanged.
+  If operations set param to different values than one of the operations will be cut
+  down if needed. Server cuts down already applied operation if favour of new. Client
+  cuts down new operation if favour of applied one.
   
-  По всему коду приняты следующие обозначения:
-      p, pos: позиция, отсчитываемая от начала документа
-      offset: позиция, отсчитываемая от начала блока форматирования
-      index: индекс блока с форматированием
-  В операциях приняты обозначения:
-      t: текст, противопоставляется оригинальному s - string 
-      params: параметры, привязанные к тексту
-      i: insert, вставка
-      d: delete, удаление
-      p: позиция, отсчитываемая от начала документа
-      len: длина, указывается только для операций, в которых не может быть вычислена
+  Next variable names are fixed throughout the code:
+      p, pos: position calculated from the start of document
+      offset: position calculated from the start of fragment
+      index: index of fragment in document
+  Next notations is used for operations:
+      t: text, opposed to original s - string
+      params: parameters of fragment of text
+      i: insertion
+      d: deletion
+      p: position calculated from the start of document
+      len: lenght, only set for those operation in which it cannot be calculated from other fields
   */
 
   clone = function(o) {
@@ -500,6 +523,7 @@
   FormattedText = (function() {
 
     function FormattedText() {
+      this.transformOp = __bind(this.transformOp, this);
       this._transformParamsdAgainstParamsd = __bind(this._transformParamsdAgainstParamsd, this);
       this._transformParamsiAgainstParamsi = __bind(this._transformParamsiAgainstParamsi, this);
       this._transformParamsChangeAgainstParamsChange = __bind(this._transformParamsChangeAgainstParamsChange, this);
@@ -616,7 +640,6 @@
 
     FormattedText.prototype._applyTextInsert = function(snapshot, op) {
       var block, blockIndex, blocks, newBlock, offset, _ref, _ref2;
-      snapshot = clone(snapshot);
       _ref = this._getBlockAndOffset(snapshot, op.p), blockIndex = _ref[0], offset = _ref[1];
       if (snapshot.length === blockIndex) {
         snapshot.push({
@@ -644,7 +667,6 @@
 
     FormattedText.prototype._applyTextDelete = function(snapshot, op) {
       var block, blockIndex, blockText, offset, _ref, _ref2;
-      snapshot = clone(snapshot);
       _ref = this._getBlockAndOffset(snapshot, op.p), blockIndex = _ref[0], offset = _ref[1];
       block = snapshot[blockIndex];
       if (!this._paramsAreEqual(block.params, op.params)) {
@@ -729,7 +751,6 @@
               @param transformBlock: function, функция, изменяющая параметры
       */
       var endBlockIndex, endOffset, i, startBlockIndex, startOffset, _ref, _ref2, _ref3, _ref4;
-      snapshot = clone(snapshot);
       _ref = this._getBlockAndOffset(snapshot, p), startBlockIndex = _ref[0], startOffset = _ref[1];
       _ref2 = this._getBlockAndOffset(snapshot, p + len), endBlockIndex = _ref2[0], endOffset = _ref2[1];
       if (endOffset === 0) {
@@ -1114,29 +1135,6 @@
       throw new Error("Unknown operation applied: " + (JSON.stringify(op)));
     };
 
-    FormattedText.prototype.transform = function(ops1, ops2, type) {
-      /*
-              Преобразует операции ops1 при условии, что были применены ops2.
-              Возвращает преобразованные ops1.
-              @param ops1: [object], array of OT operations
-              @param ops2: [object], array of OT operations
-              @param type: string, 'left' или 'right'
-              @return: [object], array of OT operations
-      */
-      var op1, op2, res, tmpDest, _i, _j, _len, _len2;
-      res = clone(ops1);
-      for (_i = 0, _len = ops2.length; _i < _len; _i++) {
-        op2 = ops2[_i];
-        tmpDest = [];
-        for (_j = 0, _len2 = res.length; _j < _len2; _j++) {
-          op1 = res[_j];
-          this.transformOp(tmpDest, op1, op2, type);
-        }
-        res = tmpDest;
-      }
-      return res;
-    };
-
     FormattedText.prototype.transformOp = function(dest, op1, op2, type) {
       /*
               Преобразует op1 при условии, что была применена op2
@@ -1215,14 +1213,30 @@
 
   })();
 
+  formattedText = new FormattedText();
+
+  check = function() {};
+
   if (typeof WEB !== "undefined" && WEB !== null) {
     exports.types || (exports.types = {});
-    exports.types.ftext = new FormattedText();
+    exports._bt(formattedText, formattedText.transformOp, check, function(dest, c) {
+      return dest.push(c);
+    });
+    exports.types.ftext = formattedText;
   } else {
-    module.exports = new FormattedText();
+    require('./helpers').bootstrapTransform(formattedText, formattedText.transformOp, check, function(dest, c) {
+      return dest.push(c);
+    });
+    module.exports = formattedText;
   }
 
   if (typeof WEB === "undefined" || WEB === null) types = require('../types');
+
+  if (typeof WEB !== "undefined" && WEB !== null) {
+    exports.extendDoc = function(name, fn) {
+      return Doc.prototype[name] = fn;
+    };
+  }
 
   Doc = (function() {
 
