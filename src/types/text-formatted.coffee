@@ -205,15 +205,27 @@ class FormattedText
         ###
         for name, value of params
             return [name, value]
+
+    _hasOneParam: (params) ->
+        ###
+        Возвращает true, если у объекта ровно одно свое свойство
+        @param params: object
+        @return: boolean
+        ###
+        hasParam = false
+        for own prop of params
+            return false if hasParam
+            hasParam = true
+        return hasParam
     
     _deleteParams: (params, toDelete) ->
         [name, value] = @_getFirstParam(toDelete)
         if params[name] isnt value
             throw new Error "Params delete tried to remove param #{name} with value #{value} from #{JSON.stringify(params)}, but it does not match"
         delete params[name]
-    
+
     _applyParamsDelete: (snapshot, op) =>
-        if Object.keys(op.paramsd).length != 1
+        if not @_hasOneParam(op.paramsd)
             throw new Error "Exactly one param should be deleted: #{JSON.stringify(op)}"
         transformBlock = (block) =>
             @_deleteParams(block.params, op.paramsd)
@@ -226,7 +238,7 @@ class FormattedText
         params[name] = value
 
     _applyParamsInsert: (snapshot, op) =>
-        if Object.keys(op.paramsi).length != 1
+        if not @_hasOneParam(op.paramsi)
             throw new Error "Exactly one param should be inserted: #{JSON.stringify(op)}"
         transformBlock = (block) =>
             @_insertParams(block.params, op.paramsi)
