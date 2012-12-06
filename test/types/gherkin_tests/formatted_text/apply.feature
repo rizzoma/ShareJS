@@ -185,3 +185,10 @@ Feature: Apply of text insert operation
 		And client1
 		When client1 submits [{"p": 1, "len": 1, "paramsd": {"i": true}}]
 		Then client1 should have [{"t": "a", "params": {"b": true, "i": true}}, {"t": "bc", "params": {"b": true}}]
+
+    Scenario: text insert with params, inserted text block shouldn't keep link to operation params
+      Given server with []
+      And client1
+      When client1 submits [{"p": 0, "ti": "b", "params": {}}, {"p": 0, "len": 1, "paramsi": {"key": "value"}}]
+      And server receives operation 1 from client1
+      Then server should have [{"t": "b", "params": {"key": "value"}}]

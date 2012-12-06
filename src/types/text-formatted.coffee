@@ -165,7 +165,7 @@ class FormattedText
     _applyTextInsert: (snapshot, op) =>
         [blockIndex, offset] = @_getBlockAndOffset(snapshot, op.p)
         if snapshot.length is blockIndex
-            snapshot.push {t: op.ti, params: op.params}
+            snapshot.push {t: op.ti, params: clone(op.params)}
             @_tryMerge(snapshot, blockIndex-1, blockIndex)
             return snapshot
         block = snapshot[blockIndex]
@@ -177,7 +177,7 @@ class FormattedText
             blocks = @_splitBlock(block, offset)
             newBlock =
                 t: op.ti
-                params: op.params
+                params: clone(op.params)
             blocks[blocks.length-1...blocks.length-1] = newBlock
             snapshot[blockIndex..blockIndex] = blocks
             @_tryMerge(snapshot, blockIndex-1, blockIndex)
