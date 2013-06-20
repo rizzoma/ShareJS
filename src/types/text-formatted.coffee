@@ -131,7 +131,7 @@ class FormattedText
         ###
         _secondHasFirst = (first, second) ->
             for key of first
-                return false if not second[key]?
+                return false if key not of second
                 return false if first[key] isnt second[key]
             true
         return false if not _secondHasFirst(first, second)
