@@ -110,6 +110,17 @@ class FormattedText
         if p > totalLen
             throw new Error "Specified position (#{p}) is more then text length (#{totalLen})" 
         return [snapshot.length, p - totalLen]
+
+    _checkParams: (params) ->
+        ###
+        Разрешены только скалярные параметры, которые можно сравнить через ==
+        @params: object
+        ###
+        if not params instanceof Object
+            throw new Error "Params should be an object"
+        for _, value of params
+            if value instanceof Object
+                throw new Error "Non-scalar types are not allowed in params"
     
     _paramsAreEqual: (first, second) ->
         ###
@@ -163,6 +174,7 @@ class FormattedText
             i--
     
     _applyTextInsert: (snapshot, op) =>
+        @_checkParams(op.params)
         [blockIndex, offset] = @_getBlockAndOffset(snapshot, op.p)
         if snapshot.length is blockIndex
             snapshot.push {t: op.ti, params: clone(op.params)}
@@ -238,6 +250,7 @@ class FormattedText
         params[name] = value
 
     _applyParamsInsert: (snapshot, op) =>
+        @_checkParams(op.paramsi)
         if not @_hasOneParam(op.paramsi)
             throw new Error "Exactly one param should be inserted: #{JSON.stringify(op)}"
         transformBlock = (block) =>
